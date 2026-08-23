@@ -598,3 +598,32 @@
    - Result: Both returned Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
 8. **Stripe API Verification**: Retrieved PaymentIntent via Stripe SDK using `stripe.paymentIntents.retrieve(paymentIntentId)`.
    - Result: Confirmed PaymentIntent exists on Stripe's servers with `amount: 25000` (cents = $250.00), `currency: "usd"`, and `metadata: { bookingId, customerId }`.
+
+## [2026-08-24] - Payments Module: Webhook Handler & Payment Status Auto-Confirmation
+
+### Files Created & Refactored
+- **`src/app.ts`**: Mounted `express.raw({ type: "application/json" })` specifically for `/api/payments/confirm` before `express.json()` to preserve unparsed `Buffer` request payloads required for Stripe webhook signature verification. Also attached `rawBody` property in `express.json({ verify })` fallback.
+- **`src/modules/payments/service.ts`**:
+  - `handleWebhookEvent(rawBody, signature)`: Verifies Stripe webhook signature using `stripe.webhooks.constructEvent(rawBody, signature, config.stripe.webhookSecret)`. Throws `AppError(400, "Webhook signature verification failed")` on signature mismatch or tampered payload.
+  - **`payment_intent.succeeded` Handling**: Extracts `PaymentIntent` ID (`transactionId`), finds `Payment` record, and performs a Prisma `$transaction` updating `Payment.status = "COMPLETED"`, `Payment.paidAt = new Date()`, and `Booking.status = "PAID"`.
+  - **`payment_intent.payment_failed` Handling**: Updates `Payment.status = "FAILED"` without altering `Booking.status` (leaving it `ACCEPTED` so customer can retry).
+  - `getMyPayments(userId, role)`: Lists caller's payments if `role === "CUSTOMER"`.
+  - `getPaymentById(userId, role, paymentId)`: Fetches payment record with ownership verification (`payment.booking.customerId === userId`).
+- **`src/modules/payments/controller.ts`**: Handlers `confirmWebhook`, `getMyPayments`, and `getPaymentById` wrapped in `asyncHandler`.
+- **`src/modules/payments/route.ts`**: Mounted `POST /confirm` (public webhook, signature verified), `GET /` (`authenticate`, `authorize('CUSTOMER')`), and `GET /:id` (`authenticate`, `authorize('CUSTOMER')`).
+
+### Verification Results
+1. **Successful Payment Confirmation & Webhook Processing**: Confirmed `PaymentIntent` (`pi_...`) via Stripe SDK with `pm_card_visa` and sent signed `payment_intent.succeeded` webhook to `POST /api/payments/confirm`.
+   - Result: Webhook returned HTTP 200 `{ success: true, message: "Webhook processed successfully", data: { received: true } }`.
+2. **GET Payment Record Verification**: Called `GET /api/payments/:id` as the paying customer.
+   - Result: Status 200 returning payment record with `status: "COMPLETED"` and `paidAt` timestamp set.
+3. **Auto-Updated Booking Status Verification**: Called `GET /api/bookings/:id` for the paid booking.
+   - Result: Status 200 returning booking with `status: "PAID"` (auto-updated by database transaction).
+4. **Invalid Signature Verification Failure**: Sent webhook request to `POST /api/payments/confirm` with a tampered `stripe-signature` header.
+   - Result: Returned HTTP 400 `{ success: false, message: "Webhook signature verification failed", errorDetails: "..." }`. No database modifications occurred.
+5. **Payment Failure Webhook Handling**: Sent signed `payment_intent.payment_failed` event.
+   - Result: Returned HTTP 200. `Payment.status` updated to `FAILED`, while `Booking.status` remained `ACCEPTED`.
+6. **Customer Payment Listing (`GET /api/payments`)**: Called `GET /api/payments` as paying customer.
+   - Result: Status 200 returning list of customer's payments including `COMPLETED` and `PENDING` records.
+7. **Cross-Customer Isolation**: Called `GET /api/payments` as a different customer.
+   - Result: Status 200 returning `data: []` (no leakage of Customer 1's payment records).

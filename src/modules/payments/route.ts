@@ -6,12 +6,28 @@ import { createPaymentIntentSchema } from "./validation";
 
 const router = Router();
 
+router.post("/confirm", paymentsController.confirmWebhook);
+
 router.post(
   "/create",
   authenticate,
   authorize("CUSTOMER"),
   validateRequest(createPaymentIntentSchema),
   paymentsController.createPaymentIntent,
+);
+
+router.get(
+  "/",
+  authenticate,
+  authorize("CUSTOMER"),
+  paymentsController.getMyPayments,
+);
+
+router.get(
+  "/:id",
+  authenticate,
+  authorize("CUSTOMER"),
+  paymentsController.getPaymentById,
 );
 
 export default router;

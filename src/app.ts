@@ -12,7 +12,17 @@ const app: Application = express();
 
 // Middlewares
 app.use(cors());
-app.use(express.json());
+
+// Raw body parser specifically for Stripe webhook endpoint to preserve Buffer signature validation
+app.use("/api/payments/confirm", express.raw({ type: "application/json" }));
+
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as unknown as { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: true }));
 
 // Route Mounting
