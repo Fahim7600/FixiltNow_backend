@@ -48,6 +48,7 @@ model User {
   updatedAt         DateTime           @updatedAt
   technicianProfile TechnicianProfile?
   bookings          Booking[]
+  reviews           Review[]
 }
 
 model Category {
@@ -75,6 +76,7 @@ model TechnicianProfile {
   services        Service[]
   availability    Availability[]
   bookings        Booking[]
+  reviews         Review[]
 }
 
 model Service {
@@ -117,6 +119,7 @@ model Booking {
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
   payment             Payment?
+  review              Review?
 }
 
 model Payment {
@@ -131,4 +134,17 @@ model Payment {
   paidAt        DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+}
+
+model Review {
+  id                  String            @id @default(uuid())
+  bookingId           String            @unique
+  booking             Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  customerId          String
+  customer            User              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  technicianProfileId String
+  technicianProfile   TechnicianProfile @relation(fields: [technicianProfileId], references: [id], onDelete: Cascade)
+  rating              Int
+  comment             String?
+  createdAt           DateTime          @default(now())
 }

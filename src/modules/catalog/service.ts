@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "../../config/prisma";
 import { AppError } from "../../utils/AppError";
+import { getTechnicianReviews } from "../reviews/service";
 import type { ServicesQueryInput, TechniciansQueryInput } from "./validation";
 
 export const getPublicServices = async (filters: ServicesQueryInput) => {
@@ -158,9 +159,10 @@ export const getTechnicianById = async (id: string) => {
     throw new AppError(404, "Technician not found");
   }
 
-  // TODO: reviews will be populated when reviews module is implemented
+  const reviews = await getTechnicianReviews(technician.id);
+
   return {
     ...technician,
-    reviews: [],
+    reviews,
   };
 };

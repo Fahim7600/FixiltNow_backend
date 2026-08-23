@@ -669,3 +669,43 @@
    - Result: Status 403 `{ success: false, message: "You do not have permission to view this payment", errorDetails: "..." }`.
 8. **Nonexistent Payment ID Lookup**: Called `GET /api/payments/00000000-0000-0000-0000-000000000000`.
    - Result: Status 404 `{ success: false, message: "Payment not found", errorDetails: "Payment not found" }`.
+
+## [2026-08-24] - Reviews Module: Ratings, Review Creation & Technician Profile Aggregation
+
+### Database Changes
+- **`prisma/schema.prisma`**:
+  - Added `Review` model (`id`, `bookingId` unique relation to `Booking`, `customerId` relation to `User`, `technicianProfileId` relation to `TechnicianProfile`, `rating` int 1-5, `comment` optional string, `createdAt`).
+  - Added inverse relations: `review Review?` on `Booking`, `reviews Review[]` on `User` and `TechnicianProfile`.
+- Applied migration `20260823190912_add_review_model` to remote Postgres database and regenerated Prisma Client.
+
+### Files Created & Refactored
+- **`src/modules/reviews/validation.ts`**: `createReviewSchema` validating required UUID `bookingId`, `rating` (int min 1 max 5), and optional `comment` (max 1000 chars).
+- **`src/modules/reviews/service.ts`**:
+  - `createReview(customerId, data)`: Fetches booking. Verifies `booking.customerId === customerId` (`AppError(403)`), `booking.status === "COMPLETED"` (`AppError(400)`), and `!booking.review` (`AppError(400)`).
+  - Executed inside a Prisma `$transaction`: Creates the `Review` row, calculates `_avg` rating and `_count` total reviews for `technicianProfileId` using Prisma `aggregate`, and updates `TechnicianProfile.avgRating` & `TechnicianProfile.totalReviews`.
+  - `getTechnicianReviews(technicianProfileId)`: Public function returning customer name, rating, comment, and createdAt for a technician profile, ordered by `createdAt` descending.
+- **`src/modules/reviews/controller.ts`**: Handlers `createReview` (201) and `getTechnicianReviews` (200) wrapped in `asyncHandler`.
+- **`src/modules/reviews/route.ts`**: Mounted `POST /` (`authenticate` + `authorize('CUSTOMER')`).
+- **`src/modules/catalog/service.ts`**: Updated `getTechnicianById` to import `getTechnicianReviews` from `src/modules/reviews/service.ts` and dynamically populate the `reviews` array (replacing the previous `reviews: []` placeholder).
+- **`src/routes/index.ts`**: Mounted `reviewRoutes` under `/reviews` (`POST /api/reviews`).
+
+### Cross-Module Import Decision
+- Imported `getTechnicianReviews` from `src/modules/reviews/service.ts` directly into `src/modules/catalog/service.ts`. Since `reviews/service.ts` does not depend on or import `catalog/service.ts`, this maintains a clean, one-way dependency graph without circular import warnings or runtime errors.
+
+### Verification Results
+1. **Valid Review Creation for COMPLETED Booking**: Customer called `POST /api/reviews` (`bookingId: "<completedId>", rating: 5, comment: "Great work"`).
+   - Result: Status 201 `{ success: true, message: "Review created successfully", data: { id, rating: 5, comment: "Great work", ... } }`.
+2. **Populated Public Technician Profile & Rating Aggregation**: Called `GET /api/technicians/:id`.
+   - Result: Status 200 returning `avgRating: 5`, `totalReviews: 1`, and `reviews` array containing the newly submitted review object.
+3. **Duplicate Review Prevention**: Re-sent `POST /api/reviews` for the same booking.
+   - Result: Status 400 `{ success: false, message: "You have already reviewed this booking", errorDetails: "..." }`.
+4. **Non-COMPLETED Booking Review Rejection**: Customer attempted review on an `ACCEPTED` booking.
+   - Result: Status 400 `{ success: false, message: "You can only review completed bookings", errorDetails: "..." }`.
+5. **Unrelated Customer Access Denial**: Customer 2 attempted to review Customer 1's booking.
+   - Result: Status 403 `{ success: false, message: "You can only review your own bookings", errorDetails: "..." }`.
+6. **Rating Out-of-Range Validation**: Sent `rating: 6` and `rating: 0`.
+   - Result: Both returned Status 400 validation error (`rating: Rating cannot exceed 5` / `rating: Rating must be at least 1`).
+7. **Multiple Rating Recalculation**: Submitted a second review (`rating: 3`) for the same technician.
+   - Result: Status 201. `GET /api/technicians/:id` confirmed `avgRating: 4` (average of 5 and 3) and `totalReviews: 2`.
+8. **Role Access Restrictions (Technician & Admin)**: Attempted review submission using TECHNICIAN and ADMIN tokens.
+   - Result: Both returned Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.

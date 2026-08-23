@@ -11,6 +11,7 @@ import {
 } from "../modules/catalog/route";
 import categoryRoutes from "../modules/categories/route";
 import paymentRoutes from "../modules/payments/route";
+import reviewRoutes from "../modules/reviews/route";
 import serviceRoutes from "../modules/services/route";
 import technicianProfileRoutes from "../modules/technicianProfile/route";
 
@@ -34,5 +35,6 @@ router.use("/services", publicServicesRouter);
 router.use("/technicians", publicTechniciansRouter);
 router.use("/bookings", bookingRoutes);
 router.use("/payments", paymentRoutes);
+router.use("/reviews", reviewRoutes);
 
 export default router;
