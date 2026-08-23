@@ -627,3 +627,45 @@
    - Result: Status 200 returning list of customer's payments including `COMPLETED` and `PENDING` records.
 7. **Cross-Customer Isolation**: Called `GET /api/payments` as a different customer.
    - Result: Status 200 returning `data: []` (no leakage of Customer 1's payment records).
+
+## [2026-08-24] - Payments Module: Enriched Payment History & Detail Endpoints with Role-Based Access
+
+### Files Created & Refactored
+- **`src/modules/payments/service.ts`**:
+  - `getMyPayments(userId, role)`: Refactored with role-based branching:
+    - **CUSTOMER**: Returns payment records linked to their bookings, enriched with `scheduledDate`, `serviceTitle`, and `technicianName`.
+    - **TECHNICIAN**: Returns payment records linked to bookings on their `TechnicianProfile`, enriched with `scheduledDate`, `serviceTitle`, and `customerName`.
+    - **ADMIN**: Throws `AppError(403, "Forbidden", "Full admin payment listing is available in the admin dashboard")` to defer full listing to Prompt 22.
+  - `getPaymentById(userId, role, paymentId)`: Enriched with booking/service/user context and role-scoped ownership checks:
+    - **CUSTOMER**: Verifies `payment.booking.customerId === userId` (throws 403 on mismatch).
+    - **TECHNICIAN**: Verifies `payment.booking.technicianProfile.userId === userId` (throws 403 on mismatch).
+    - **ADMIN**: Granted full read-only access to view any payment by ID.
+    - Throws `AppError(404, "Payment not found")` if ID does not exist.
+- **`src/modules/payments/route.ts`**:
+  - Updated `GET /` and `GET /:id` to use `authorize('CUSTOMER', 'TECHNICIAN', 'ADMIN')`.
+
+### Role-Branching Architecture Decision
+- For `GET /api/payments` (the list endpoint):
+  - **CUSTOMER**: Sees payments for their booked services.
+  - **TECHNICIAN**: Sees payments for completed/accepted jobs on their services (consistent with Bookings module role-branching pattern).
+  - **ADMIN**: Restricted with HTTP 403, delegating global admin payment listing to Prompt 22.
+- For `GET /api/payments/:id` (by-ID endpoint):
+  - **ADMIN**: Allowed full read-only access ahead of Prompt 22 for single payment lookup.
+
+### Verification Results
+1. **Enriched Customer Payment Listing**: Called `GET /api/payments` as CUSTOMER.
+   - Result: Status 200 returning list items with `serviceTitle: "Solar Panel Maintenance"`, `scheduledDate`, `technicianName: "Enriched Tech 1"`.
+2. **Enriched Technician Payment Listing**: Called `GET /api/payments` as TECHNICIAN.
+   - Result: Status 200 returning list items with `serviceTitle: "Solar Panel Maintenance"`, `scheduledDate`, `customerName: "Enriched Cust 1"`.
+3. **Admin Payment Listing Restriction**: Called `GET /api/payments` as ADMIN.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "Full admin payment listing is available in the admin dashboard" }`.
+4. **Admin Single Payment Access**: Called `GET /api/payments/:id` as ADMIN with valid payment ID.
+   - Result: Status 200 returning full enriched payment details.
+5. **Assigned Technician Payment Detail Access**: Called `GET /api/payments/:id` as assigned TECHNICIAN.
+   - Result: Status 200 returning full enriched payment details.
+6. **Unrelated Technician Access Denial**: Called `GET /api/payments/:id` as an unrelated TECHNICIAN.
+   - Result: Status 403 `{ success: false, message: "You do not have permission to view this payment", errorDetails: "..." }`.
+7. **Unrelated Customer Access Denial**: Called `GET /api/payments/:id` as an unrelated CUSTOMER.
+   - Result: Status 403 `{ success: false, message: "You do not have permission to view this payment", errorDetails: "..." }`.
+8. **Nonexistent Payment ID Lookup**: Called `GET /api/payments/00000000-0000-0000-0000-000000000000`.
+   - Result: Status 404 `{ success: false, message: "Payment not found", errorDetails: "Payment not found" }`.

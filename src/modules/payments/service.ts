@@ -146,38 +146,117 @@ export const handleWebhookEvent = async (
 };
 
 export const getMyPayments = async (userId: string, role: string) => {
-  if (role !== "CUSTOMER") {
+  if (role === "ADMIN") {
     throw new AppError(
       403,
       "Forbidden",
-      "Only customers can view their payment history",
+      "Full admin payment listing is available in the admin dashboard",
     );
   }
 
-  const payments = await prisma.payment.findMany({
-    where: {
-      booking: {
-        customerId: userId,
+  if (role === "CUSTOMER") {
+    const payments = await prisma.payment.findMany({
+      where: {
+        booking: {
+          customerId: userId,
+        },
       },
-    },
-    include: {
-      booking: {
-        select: {
-          id: true,
-          scheduledDate: true,
-          service: {
-            select: {
-              id: true,
-              title: true,
+      include: {
+        booking: {
+          select: {
+            id: true,
+            scheduledDate: true,
+            service: {
+              select: {
+                title: true,
+              },
+            },
+            technicianProfile: {
+              select: {
+                user: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
             },
           },
         },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    });
 
-  return payments;
+    return payments.map((p) => ({
+      id: p.id,
+      bookingId: p.bookingId,
+      transactionId: p.transactionId,
+      amount: p.amount,
+      method: p.method,
+      provider: p.provider,
+      status: p.status,
+      paidAt: p.paidAt,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      scheduledDate: p.booking.scheduledDate,
+      serviceTitle: p.booking.service.title,
+      technicianName: p.booking.technicianProfile.user.name,
+    }));
+  }
+
+  if (role === "TECHNICIAN") {
+    const techProfile = await prisma.technicianProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!techProfile) {
+      throw new AppError(404, "Technician profile not found");
+    }
+
+    const payments = await prisma.payment.findMany({
+      where: {
+        booking: {
+          technicianProfileId: techProfile.id,
+        },
+      },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            scheduledDate: true,
+            service: {
+              select: {
+                title: true,
+              },
+            },
+            customer: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return payments.map((p) => ({
+      id: p.id,
+      bookingId: p.bookingId,
+      transactionId: p.transactionId,
+      amount: p.amount,
+      method: p.method,
+      provider: p.provider,
+      status: p.status,
+      paidAt: p.paidAt,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      scheduledDate: p.booking.scheduledDate,
+      serviceTitle: p.booking.service.title,
+      customerName: p.booking.customer.name,
+    }));
+  }
+
+  throw new AppError(403, "Forbidden");
 };
 
 export const getPaymentById = async (
@@ -192,11 +271,26 @@ export const getPaymentById = async (
         select: {
           id: true,
           customerId: true,
+          technicianProfileId: true,
           scheduledDate: true,
           service: {
             select: {
-              id: true,
               title: true,
+            },
+          },
+          customer: {
+            select: {
+              name: true,
+            },
+          },
+          technicianProfile: {
+            select: {
+              userId: true,
+              user: {
+                select: {
+                  name: true,
+                },
+              },
             },
           },
         },
@@ -212,5 +306,27 @@ export const getPaymentById = async (
     throw new AppError(403, "You do not have permission to view this payment");
   }
 
-  return payment;
+  if (
+    role === "TECHNICIAN" &&
+    payment.booking.technicianProfile.userId !== userId
+  ) {
+    throw new AppError(403, "You do not have permission to view this payment");
+  }
+
+  return {
+    id: payment.id,
+    bookingId: payment.bookingId,
+    transactionId: payment.transactionId,
+    amount: payment.amount,
+    method: payment.method,
+    provider: payment.provider,
+    status: payment.status,
+    paidAt: payment.paidAt,
+    createdAt: payment.createdAt,
+    updatedAt: payment.updatedAt,
+    scheduledDate: payment.booking.scheduledDate,
+    serviceTitle: payment.booking.service.title,
+    customerName: payment.booking.customer.name,
+    technicianName: payment.booking.technicianProfile.user.name,
+  };
 };

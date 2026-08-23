@@ -19,14 +19,14 @@ router.post(
 router.get(
   "/",
   authenticate,
-  authorize("CUSTOMER"),
+  authorize("CUSTOMER", "TECHNICIAN", "ADMIN"),
   paymentsController.getMyPayments,
 );
 
 router.get(
   "/:id",
   authenticate,
-  authorize("CUSTOMER"),
+  authorize("CUSTOMER", "TECHNICIAN", "ADMIN"),
   paymentsController.getPaymentById,
 );
 
