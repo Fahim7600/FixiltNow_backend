@@ -295,3 +295,35 @@
    - Result: Status 200 returning array containing newly created `Plumbing` category object.
 7. **Validation Failure Handling**: Sent `POST /api/admin/categories` with invalid data (`name: "  "`).
    - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "name: Category name must be at least 2 characters" }`.
+
+## [2026-08-23] - Technician Profile Module & Own Profile Management
+
+### Database Changes
+- **`prisma/schema.prisma`**: Added `TechnicianProfile` model (`id`, `userId` unique relation to `User`, `bio`, `skills`, `experienceYears`, `hourlyRate`, `avgRating`, `totalReviews`, `createdAt`, `updatedAt`). Added `technicianProfile` inverse relation field to `User`.
+- Applied migration `20260823125158_add_technician_profile_model` to remote Postgres database and regenerated Prisma Client.
+
+### Files Created & Refactored
+- **`src/modules/technicianProfile/validation.ts`**: `upsertProfileSchema` validating optional `bio`, `skills` array, `experienceYears` (min 0), and positive `hourlyRate` (`> 0`).
+- **`src/modules/technicianProfile/service.ts`**:
+  - `upsertProfile`: Creates or updates technician profile for `userId` using Prisma `upsert`.
+  - `getMyProfile`: Fetches profile for `userId`; throws `AppError(404, "Profile not found. Please create your technician profile first.")` if missing.
+- **`src/modules/technicianProfile/controller.ts`**: Express handlers `upsertProfile` and `getMyProfile` wrapped in `asyncHandler`.
+- **`src/modules/technicianProfile/route.ts`**: Routes `PUT /profile` and `GET /profile` protected by `authenticate` + `authorize('TECHNICIAN')`.
+- **`src/routes/index.ts`**: Mounted `technicianProfileRoutes` under `/technician` (endpoints `PUT /api/technician/profile`, `GET /api/technician/profile`).
+
+### Verification Results
+1. **Technician Account Registration & Login**: Registered `tech.john@example.com` (`role: TECHNICIAN`), logged in, and obtained JWT token.
+2. **Missing Profile Lookup**: Called `GET /api/technician/profile` prior to profile creation.
+   - Result: Status 404 `{ success: false, message: "Profile not found. Please create your technician profile first.", errorDetails: "Profile not found. Please create your technician profile first." }`.
+3. **Profile Creation**: Sent `PUT /api/technician/profile` with valid payload (`bio: "Expert plumber"`, `skills: ["Pipe repair", "Installation"]`, `experienceYears: 5`, `hourlyRate: 25.50`).
+   - Result: Status 200 `{ success: true, message: "Technician profile saved successfully", data: { id, userId, bio, skills, hourlyRate: "25.5", ... } }`.
+4. **Profile Retrieval**: Called `GET /api/technician/profile` after creation.
+   - Result: Status 200 returning saved profile data.
+5. **Profile Update & Idempotency**: Sent `PUT /api/technician/profile` with updated `hourlyRate: 30.00`.
+   - Result: Status 200 returning updated profile. Database check confirmed exactly 1 `TechnicianProfile` row for `userId`.
+6. **Negative Rate Validation**: Sent `PUT /api/technician/profile` with `hourlyRate: -5`.
+   - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "hourlyRate: Hourly rate must be a positive number" }`.
+7. **Role Restriction (CUSTOMER)**: Sent `PUT /api/technician/profile` using a CUSTOMER token.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+8. **Unauthenticated Access**: Sent `PUT /api/technician/profile` with no Authorization header.
+   - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
