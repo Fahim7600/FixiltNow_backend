@@ -10,6 +10,7 @@ import {
   publicTechniciansRouter,
 } from "../modules/catalog/route";
 import categoryRoutes from "../modules/categories/route";
+import paymentRoutes from "../modules/payments/route";
 import serviceRoutes from "../modules/services/route";
 import technicianProfileRoutes from "../modules/technicianProfile/route";
 
@@ -32,5 +33,6 @@ router.use("/technician/bookings", technicianBookingRouter);
 router.use("/services", publicServicesRouter);
 router.use("/technicians", publicTechniciansRouter);
 router.use("/bookings", bookingRoutes);
+router.use("/payments", paymentRoutes);
 
 export default router;

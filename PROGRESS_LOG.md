@@ -561,3 +561,40 @@
    - Result: App failed fast at startup with clear exception: `Error: Missing required environment variable(s): STRIPE_SECRET_KEY`. Restored `.env` immediately.
 3. **Stripe API Connectivity Check**: Executed `stripe.balance.retrieve()` call using the singleton client instance.
    - Result: Returned successfully with `object: "balance"`, `livemode: false`, and `available: [{ currency: "usd" }]`.
+
+## [2026-08-24] - Payments Module: Stripe PaymentIntent Creation (`POST /api/payments/create`)
+
+### Database Changes
+- **`prisma/schema.prisma`**:
+  - Added `PaymentStatus` enum (`PENDING`, `COMPLETED`, `FAILED`).
+  - Added `Payment` model (`id`, `bookingId` unique relation to `Booking`, `transactionId` unique Stripe PaymentIntent ID, `amount` Decimal, `method` default `"card"`, `provider` default `"stripe"`, `status` default `PENDING`, `paidAt` optional DateTime, `createdAt`, `updatedAt`).
+  - Added inverse `payment Payment?` relation to `Booking`.
+- Applied migration `20260823185451_add_payment_model` to remote Postgres database and regenerated Prisma Client.
+
+### Files Created & Refactored
+- **`src/modules/payments/validation.ts`**: `createPaymentIntentSchema` validating required UUID `bookingId`.
+- **`src/modules/payments/service.ts`**:
+  - `createPaymentIntent`: Fetches target booking. Throws `AppError(404, "Booking not found")` if missing. Verifies `booking.customerId === customerId` (`AppError(403, "You can only pay for your own bookings")`). Enforces `booking.status === "ACCEPTED"` (`AppError(400, "Only accepted bookings can be paid for. Current status: <status>")`).
+  - **Duplicate/Retry PaymentIntent Approach**: If a `Payment` row exists with `status: "COMPLETED"`, throws `AppError(400, "This booking has already been paid for")`. If a `Payment` row exists with `status: "PENDING"`, creates a new Stripe PaymentIntent and updates the existing `Payment` row's `transactionId` and `amount` in-place (maintaining 1 `Payment` row per booking without duplicate DB records).
+  - Creates Stripe PaymentIntent via SDK (`stripe.paymentIntents.create`) with `amount` in cents, currency `"usd"`, and `metadata: { bookingId, customerId }`. Returns `{ clientSecret, payment }`.
+- **`src/modules/payments/controller.ts`**: Express handler `createPaymentIntent` (201) wrapped in `asyncHandler`.
+- **`src/modules/payments/route.ts`**: Mounted `POST /create` protected by `authenticate` + `authorize('CUSTOMER')` and `validateRequest(createPaymentIntentSchema)`.
+- **`src/routes/index.ts`**: Mounted `paymentRoutes` under `/payments` (`POST /api/payments/create`).
+
+### Verification Results
+1. **Valid PaymentIntent Creation for ACCEPTED Booking**: Customer called `POST /api/payments/create` for an `ACCEPTED` booking.
+   - Result: Status 201 `{ success: true, message: "Payment intent created successfully", data: { clientSecret: "pi_..._secret_...", payment: { status: "PENDING", transactionId: "pi_...", amount: "250" } } }`. Payment row created in DB with `status: PENDING`.
+2. **Duplicate/Retry PENDING PaymentIntent**: Customer re-sent `POST /api/payments/create` for the same pending booking.
+   - Result: Status 201 returning a fresh `clientSecret`. Confirmed in DB that `Payment` row count for `bookingId` remains exactly 1 (row updated in place with new `transactionId`).
+3. **REQUESTED Booking Payment Rejection**: Customer attempted payment for a `REQUESTED` booking.
+   - Result: Status 400 `{ success: false, message: "Only accepted bookings can be paid for. Current status: REQUESTED", errorDetails: "..." }`.
+4. **DECLINED Booking Payment Rejection**: Customer attempted payment for a `DECLINED` booking.
+   - Result: Status 400 `{ success: false, message: "Only accepted bookings can be paid for. Current status: DECLINED", errorDetails: "..." }`.
+5. **Unrelated Customer Access Denial**: Unrelated Customer 2 attempted payment for Customer 1's booking.
+   - Result: Status 403 `{ success: false, message: "You can only pay for your own bookings", errorDetails: "..." }`.
+6. **Nonexistent Booking ID Handling**: Customer sent `bookingId: "00000000-0000-0000-0000-000000000000"`.
+   - Result: Status 404 `{ success: false, message: "Booking not found", errorDetails: "Booking not found" }`.
+7. **Role Access Restrictions (Technician & Admin)**: Attempted request using TECHNICIAN and ADMIN tokens.
+   - Result: Both returned Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+8. **Stripe API Verification**: Retrieved PaymentIntent via Stripe SDK using `stripe.paymentIntents.retrieve(paymentIntentId)`.
+   - Result: Confirmed PaymentIntent exists on Stripe's servers with `amount: 25000` (cents = $250.00), `currency: "usd"`, and `metadata: { bookingId, customerId }`.

@@ -30,6 +30,12 @@ enum BookingStatus {
   CANCELLED
 }
 
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id                String             @id @default(uuid())
   name              String
@@ -110,4 +116,19 @@ model Booking {
   notes               String?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+  payment             Payment?
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  bookingId     String        @unique
+  booking       Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  transactionId String        @unique
+  amount        Decimal
+  method        String        @default("card")
+  provider      String        @default("stripe")
+  status        PaymentStatus @default(PENDING)
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
