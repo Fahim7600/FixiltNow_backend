@@ -834,3 +834,49 @@
    - Result: Completed cleanly without duplicate key errors. Confirmed admin user count (8) and category count (5) remained unchanged before and after.
 5. **Categories Listing**: Called `GET /api/categories`.
    - Result: Status 200 OK returning all 5 baseline categories (`Plumbing`, `Electrical`, `Cleaning`, `Painting`, `Carpentry`).
+
+## [2026-08-24] - Security Hardening, Cleanup, Logging & Deployment Setup
+
+### Packages Installed
+- **Dependencies**: `helmet`, `morgan`
+- **Dev Dependencies**: `@types/morgan`
+
+### Files Created & Refactored
+- **`src/app.ts`**:
+  - Applied `helmet()` middleware for automated security headers (`x-content-type-options: nosniff`, `x-frame-options: SAMEORIGIN`, `x-dns-prefetch-control: off`, etc.).
+  - Configured `cors` to accept `CORS_ORIGIN` env var (comma-separated list or fallback `*`).
+  - Added `morgan` HTTP request logger (configured as `"dev"` in development and `"combined"` in non-test production environments).
+  - Applied global `apiLimiter` to all `/api/*` routes.
+- **`src/middlewares/rateLimiter.ts`**:
+  - Added `apiLimiter` (100 requests per 15 minutes per IP).
+- **`src/config/env.ts`**:
+  - Added `corsOrigin` configuration parameter sourced from `process.env.CORS_ORIGIN`.
+- **`src/modules/auth/route.ts`**:
+  - Removed temporary test routes (`GET /api/auth/test-admin-only` and `GET /api/auth/test-unexpected-error`).
+- **Deployment Configurations**:
+  - **`render.yaml`**: Created Render deployment configuration (`buildCommand: npm install && npx prisma generate && npm run build`, `startCommand: npm start`).
+  - **`vercel.json`**: Created Vercel deployment configuration.
+  - **`.env.example`**: Verified and updated with all 9 environment variables (`PORT`, `NODE_ENV`, `DATABASE_URL`, `CORS_ORIGIN`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`).
+  - **`README.md`**: Updated with full project overview, tech stack list, setup steps, admin credentials, seed commands, API docs link, and Render deployment guide.
+
+### Verification Results
+1. **Helmet Security Headers**: Sent GET request to `/api/categories`.
+   - Result: Response headers include `x-content-type-options: nosniff`, `x-frame-options: SAMEORIGIN`, `x-dns-prefetch-control: off`.
+2. **General Rate Limiter**: Issued 10 rapid HTTP requests to `/api/categories`.
+   - Result: All 10 requests succeeded with HTTP 200 OK (well below the 100 req / 15 min threshold).
+3. **Test Route Cleanup**: Sent requests to `/api/auth/test-admin-only` and `/api/auth/test-unexpected-error`.
+   - Result: Both returned HTTP 404 Not Found (routes successfully removed).
+4. **Codebase Lint & Build**: Executed `npm run format ; npm run lint ; npm run build`.
+   - Result: Passed cleanly with 0 errors and 0 warnings.
+5. **Morgan Logger Verification**: Checked dev server logs during API invocation.
+   - Result: HTTP request log lines rendered formatted status and timing output (e.g. `GET /api/categories 200 52.824 ms`).
+6. **Full Regression Pass**: Tested full end-to-end flow:
+   - Registered new Customer -> 201 Created.
+   - Logged in -> 200 OK (JWT token acquired).
+   - Fetched Categories -> 200 OK.
+   - Browsed Public Services -> 200 OK.
+   - Created Booking -> 201 Created.
+   - Retrieved Customer Bookings -> 200 OK.
+   - Admin Login & List Platform Users -> 200 OK.
+7. **Environment File Audit**: Verified `.env.example` against all `process.env` references.
+   - Result: 100% accurate and up-to-date.
