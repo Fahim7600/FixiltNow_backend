@@ -2,6 +2,8 @@
 
 FixItNow is a robust, production-grade backend API for an on-demand home services marketplace platform. It connects customers seeking household repairs, maintenance, and installations with verified, skilled technicians. The platform enforces strict role-based access control, secure transaction lifecycles, availability scheduling, payment processing via Stripe, rating/review calculations, and full platform oversight for administrators.
 
+**Live API:** https://fixiltnow-backend.onrender.com
+**API Docs:** https://fixiltnow-backend.onrender.com/api-docs
 ---
 
 ## 2. Tech Stack
