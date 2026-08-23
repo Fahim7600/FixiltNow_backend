@@ -755,3 +755,54 @@
    - Result: Both returned Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
 10. **Unauthenticated Denial**: Called `/api/admin/users` with no token header.
     - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
+
+## [2026-08-24] - Complete Swagger/OpenAPI Documentation (`GET /api-docs`)
+
+### Packages Installed
+- **Dependencies**: `swagger-jsdoc`, `swagger-ui-express`
+- **Dev Dependencies**: `@types/swagger-jsdoc`, `@types/swagger-ui-express`
+
+### Files Created & Refactored
+- **`src/config/swagger.ts`**:
+  - Configured OpenAPI 3.0 specification with `info` (title "FixItNow API", version "1.0.0", description), `servers`, `securitySchemes` (`bearerAuth`), and reusable components (`StandardSuccessResponse`, `StandardErrorResponse`).
+  - Set `apis` glob pattern to `./src/modules/**/*.ts` to automatically discover and parse route JSDoc annotations across all feature modules.
+- **`src/app.ts`**:
+  - Mounted `app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec))` as a public unauthenticated documentation route.
+- **Annotated Route Files**:
+  - Added OpenAPI `@openapi` YAML annotations to all route files across all 10 modules:
+    - **`Auth`** (`src/modules/auth/route.ts`): `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`.
+    - **`Categories`** (`src/modules/categories/route.ts`): `GET /api/categories`.
+    - **`Technician Profile`** (`src/modules/technicianProfile/route.ts`): `PUT /api/technician/profile`, `GET /api/technician/profile`.
+    - **`Services`** (`src/modules/services/route.ts`): `POST /api/technician/services`, `GET /api/technician/services`, `PATCH /api/technician/services/:id`, `DELETE /api/technician/services/:id`.
+    - **`Catalog`** (`src/modules/catalog/route.ts`): `GET /api/services`, `GET /api/technicians`, `GET /api/technicians/:id`.
+    - **`Availability`** (`src/modules/availability/route.ts`): `POST /api/technician/availability`, `GET /api/technician/availability`, `DELETE /api/technician/availability/:id`.
+    - **`Bookings`** (`src/modules/bookings/route.ts`): `POST /api/bookings`, `GET /api/bookings`, `GET /api/bookings/:id`, `PATCH /api/technician/bookings/:id`.
+    - **`Payments`** (`src/modules/payments/route.ts`): `POST /api/payments/confirm`, `POST /api/payments/create`, `GET /api/payments`, `GET /api/payments/:id`.
+    - **`Reviews`** (`src/modules/reviews/route.ts`): `POST /api/reviews`.
+    - **`Admin`** (`src/modules/admin/route.ts`): `POST /api/admin/categories`, `GET /api/admin/categories`, `GET /api/admin/users`, `PATCH /api/admin/users/:id`, `GET /api/admin/bookings`, `GET /api/admin/payments`.
+
+### List of Documented Modules (10/10 Complete)
+1. `Auth`
+2. `Categories`
+3. `Technician Profile`
+4. `Services`
+5. `Catalog`
+6. `Availability`
+7. `Bookings`
+8. `Payments`
+9. `Reviews`
+10. `Admin`
+
+### Verification Results
+1. **Swagger UI Page Load**: Visited `http://localhost:5000/api-docs/`.
+   - Result: HTTP 200 OK. Returned HTML renders complete interactive Swagger UI.
+2. **All Module Tags Present**: Evaluated `swaggerSpec`.
+   - Result: Confirmed all 10 expected module tags (`Auth`, `Categories`, `Technician Profile`, `Services`, `Catalog`, `Availability`, `Bookings`, `Payments`, `Reviews`, `Admin`) were discovered and listed in the spec.
+3. **Endpoint Schema Spot-Check**: Checked 3 representative endpoints across auth requirement levels:
+   - **Public (`GET /api/categories`)**: Status 200 OK returning array of categories.
+   - **Authenticated (`GET /api/auth/me`)**: Status 401 Unauthorized when unauthenticated.
+   - **Role-Specific (`POST /api/admin/categories`)**: Status 401 Unauthorized when unauthenticated.
+4. **Behavioral Integrity Spot-Check**: Called `POST /api/auth/login` and `GET /api/categories`.
+   - Result: Both endpoints returned HTTP 200 OK with expected JSON payloads, confirming zero runtime regressions.
+5. **Clean TypeScript Build**: Executed `npm run build` (`tsc`).
+   - Result: Compiled cleanly with 0 errors and 0 warnings.

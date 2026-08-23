@@ -4,6 +4,8 @@ import express, {
   type Request,
   type Response,
 } from "express";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger";
 import { errorHandler } from "./middlewares/errorHandler";
 import { notFoundHandler } from "./middlewares/notFoundHandler";
 import routes from "./routes";
@@ -24,6 +26,9 @@ app.use(
   }),
 );
 app.use(express.urlencoded({ extended: true }));
+
+// Swagger API Documentation (Public)
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Route Mounting
 app.use("/api", routes);
