@@ -902,3 +902,14 @@
 1. **Fresh Setup Walkthrough Verification**: Verified every command (`npm install`, `cp .env.example .env`, `npx prisma migrate dev`, `npx prisma db seed`, `npm run dev`) against actual repository files and configurations.
 2. **Codebase Integrity**: Confirmed 0 broken links or stale environment variable references.
 3. **Build & Formatting**: Executed `npm run format ; npm run lint ; npm run build` — passed with 0 errors.
+
+## [2026-08-24] - Swagger Production Server URL Configuration
+
+### Files Refactored
+- **`src/config/swagger.ts`**:
+  - Updated `servers` array to list Production server (`https://fixiltnow-backend.onrender.com/api`) as the default primary option, alongside Local Development server (`http://localhost:5000/api`).
+  - Enables dropdown selection in Swagger UI when testing deployed API live on Render.
+
+### Verification Results
+1. **Build**: Executed `npm run build` — compiled with 0 errors.
+2. **Formatting & Linting**: Executed `npm run format ; npm run lint` — passed with 0 errors.

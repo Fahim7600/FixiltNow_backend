@@ -11,8 +11,12 @@ const options: swaggerJSDoc.Options = {
     },
     servers: [
       {
-        url: "http://localhost:5000/api",
-        description: "Development Server",
+        url: "https://fixiltnow-backend.onrender.com/api",
+        description: "Production Server",
+      },
+      {
+        url: `http://localhost:${process.env.PORT || 5000}/api`,
+        description: "Local Development Server",
       },
     ],
     components: {
