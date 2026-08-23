@@ -410,3 +410,38 @@
    - Result: Status 200 returning full technician profile, active services list, and `reviews: []` placeholder.
 9. **Invalid Technician Profile Lookup**: Called `GET /api/technicians/00000000-0000-0000-0000-000000000000`.
    - Result: Status 404 `{ success: false, message: "Technician not found", errorDetails: "Technician not found" }`.
+
+## [2026-08-23] - Technician Availability Module & Overlap Prevention
+
+### Database Changes
+- **`prisma/schema.prisma`**: Added `Availability` model (`id`, `technicianProfileId` relation to `TechnicianProfile`, `dayOfWeek` int 0-6, `startTime` string "HH:mm", `endTime` string "HH:mm", `createdAt`). Added `availability Availability[]` relation to `TechnicianProfile`.
+- Applied migration `20260823174407_add_availability_model` to remote Postgres database and regenerated Prisma Client.
+
+### Files Created & Refactored
+- **`src/modules/availability/validation.ts`**:
+  - `createAvailabilitySchema`: Validates `dayOfWeek` (int 0-6), `startTime` ("HH:mm" regex format), and `endTime` ("HH:mm" regex format). Refined with a check requiring `endTime > startTime` ("End time must be after start time").
+- **`src/modules/availability/service.ts`**:
+  - `addAvailability`: Verifies caller has a `TechnicianProfile`. Checks for overlapping time slots on the same `dayOfWeek` (`newStart < existingEnd && newEnd > existingStart`). Throws `AppError(400, "This time slot overlaps with an existing availability window")` on overlap. Creates slot if clean.
+  - `getMyAvailability`: Retrieves caller's availability slots ordered by `dayOfWeek` ascending then `startTime` ascending.
+  - `deleteAvailability`: Verifies ownership of the availability slot (`technicianProfile.userId === userId`). Throws `AppError(403, "You can only delete your own availability windows")` if unauthorized. Deletes slot.
+- **`src/modules/availability/controller.ts`**: Express handlers `addAvailability` (201), `getMyAvailability` (200), and `deleteAvailability` (200) wrapped in `asyncHandler`.
+- **`src/modules/availability/route.ts`**: Mounted `POST /`, `GET /`, `DELETE /:id` protected by `authenticate` + `authorize('TECHNICIAN')`.
+- **`src/routes/index.ts`**: Mounted `availabilityRoutes` under `/technician/availability`.
+
+### Verification Results
+1. **Valid Availability Window Creation**: Called `POST /api/technician/availability` with valid data (`dayOfWeek: 1, startTime: "09:00", endTime: "17:00"`).
+   - Result: Status 201 `{ success: true, message: "Availability window added successfully", data: { id, dayOfWeek: 1, startTime: "09:00", endTime: "17:00", ... } }`.
+2. **Overlapping Window Prevention**: Called `POST /api/technician/availability` with an overlapping slot (`dayOfWeek: 1, startTime: "12:00", endTime: "18:00"`).
+   - Result: Status 400 `{ success: false, message: "This time slot overlaps with an existing availability window", errorDetails: "..." }`.
+3. **Adjacent / Non-Overlapping Window Creation**: Called `POST /api/technician/availability` with a non-overlapping slot (`dayOfWeek: 1, startTime: "18:00", endTime: "20:00"`).
+   - Result: Status 201 `{ success: true, message: "Availability window added successfully", data: { id, dayOfWeek: 1, startTime: "18:00", endTime: "20:00", ... } }`.
+4. **Invalid End Time Order Validation**: Called `POST /api/technician/availability` with `endTime` before `startTime` (`startTime: "17:00", endTime: "09:00"`).
+   - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "endTime: End time must be after start time" }`.
+5. **Time Format Regex Validation**: Called `POST /api/technician/availability` with invalid format (`startTime: "9am"`).
+   - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "startTime: Start time must be in HH:mm format, ..." }`.
+6. **My Availability Retrieval & Sorting**: Called `GET /api/technician/availability`.
+   - Result: Status 200 returning caller's windows ordered by `dayOfWeek` then `startTime` (`09:00 - 17:00`, `18:00 - 20:00`).
+7. **Cross-Technician Deletion Prevention**: Registered Technician 2, logged in, and attempted `DELETE /api/technician/availability/:id` on Technician 1's slot.
+   - Result: Status 403 `{ success: false, message: "You can only delete your own availability windows", errorDetails: "..." }`.
+8. **Owner Deletion Verification**: Technician 1 called `DELETE /api/technician/availability/:id` on their own slot.
+   - Result: Status 200 `{ success: true, message: "Availability window deleted successfully" }`. Follow-up `GET` confirmed slot `09:00 - 17:00` was removed.

@@ -43,19 +43,20 @@ model Category {
 }
 
 model TechnicianProfile {
-  id              String    @id @default(uuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String         @id @default(uuid())
+  userId          String         @unique
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   bio             String?
   skills          String[]
-  experienceYears Int       @default(0)
+  experienceYears Int            @default(0)
   hourlyRate      Decimal
-  avgRating       Decimal   @default(0)
-  totalReviews    Int       @default(0)
+  avgRating       Decimal        @default(0)
+  totalReviews    Int            @default(0)
   location        String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   services        Service[]
+  availability    Availability[]
 }
 
 model Service {
@@ -70,4 +71,14 @@ model Service {
   isActive            Boolean           @default(true)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+}
+
+model Availability {
+  id                  String            @id @default(uuid())
+  technicianProfileId String
+  technicianProfile   TechnicianProfile @relation(fields: [technicianProfileId], references: [id], onDelete: Cascade)
+  dayOfWeek           Int
+  startTime           String
+  endTime             String
+  createdAt           DateTime          @default(now())
 }
