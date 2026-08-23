@@ -112,3 +112,35 @@
 - **Table Verification**: Ran test script querying `prisma.user.findMany()`. Confirmed response: `CONFIRMED_REMOTE_DB: User table exists. Records count: 0`.
 - **Repo Cleanup**: Deleted throwaway test script (`test-db.js`).
 - **Lint & Build**: `npm run lint` and `npm run build` passed with zero errors.
+
+## [2026-08-23] - Auth Module: User Registration Endpoint (`POST /api/auth/register`)
+
+### Packages Installed
+- **Dependencies**: `bcrypt`, `zod`
+- **Dev Dependencies**: `@types/bcrypt`
+
+### Files Created & Modified
+- **`src/config/prisma.ts`**: Shared Prisma Client singleton configured with `@prisma/adapter-pg`.
+- **`src/middlewares/validateRequest.ts`**: Generic Request validation middleware utilizing Zod schemas.
+- **`src/modules/auth/validation.ts`**: Zod validation schema for registration (`name`, `email`, `password`, `phone`, `role`). Restricted `role` to `CUSTOMER` and `TECHNICIAN` only (`ADMIN` registration forbidden).
+- **`src/modules/auth/service.ts`**: Auth service checking for email uniqueness, hashing passwords with bcrypt (10 rounds), persisting user via Prisma, and stripping `password` field before returning.
+- **`src/modules/auth/controller.ts`**: Controller handling request/response, invoking auth service, returning standardized success (`{ success: true, message, data }`) or error (`{ success: false, message, errorDetails }`).
+- **`src/modules/auth/route.ts`**: Routes mapping `POST /register` through `validateRequest(registerSchema)` middleware to `authController.register`.
+- **`src/routes/index.ts`**: Mounted `authRoutes` under `/auth` (endpoint path: `/api/auth/register`).
+
+### Key Decisions
+- Encapsulated validation logic using Zod and created reusable `validateRequest` middleware.
+- Restricted role input in registration schema to prevent unauthorized self-registration of `ADMIN` accounts.
+- Enforced password exclusion at the service level so `password` is never returned in API payloads.
+
+### Verification Results
+1. **Valid Registration**: Sent POST request to `/api/auth/register` with valid user data.
+   - Result: HTTP 201 response received (`success: true`). Returned user data included `id`, `name`, `email`, `phone`, `role`, `status`, `createdAt`, `updatedAt`. Confirmed `password` field was **NOT** in the response body.
+2. **Duplicate Email Prevention**: Sent registration request with existing email (`john.doe@example.com`).
+   - Result: HTTP 400 response with `{ success: false, message: 'User with this email already exists', errorDetails: 'User with this email already exists' }`. No raw Prisma crash.
+3. **Validation Errors**: Sent registration request with invalid email format and short password.
+   - Result: HTTP 400 response returning formatted validation errors (`name: Name must be at least 2 characters, email: Invalid email format, password: Password must be at least 8 characters`).
+4. **Forbidden Role Registration**: Sent registration request with `role: "ADMIN"`.
+   - Result: HTTP 400 response with `{ success: false, message: 'Validation Error', errorDetails: 'role: Role must be either CUSTOMER or TECHNICIAN' }`.
+5. **Database Password Hashing**: Queried database directly using Prisma Client for `john.doe@example.com`.
+   - Result: Confirmed stored password value is a 60-character bcrypt hash (`$2b$10$ZmqMeM.FjpfPn2MT9SFuguVCcN78GwF7mhD8U7FbivGgDGqIa4j3y`), not plaintext.
