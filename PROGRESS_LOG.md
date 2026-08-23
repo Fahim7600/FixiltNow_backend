@@ -173,3 +173,27 @@
    - No token: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
    - Invalid token: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "Invalid or expired token" }`.
 6. **JWT Payload Verification**: Decoded token payload (`userId`, `role`, `iat`, `exp`). Confirmed password is **NOT** included in the token.
+
+## [2026-08-23] - Shared AuthGuard Middleware & Role-Based Access Control
+
+### Files Created & Modified
+- **`src/middlewares/authGuard.ts`**: Created shared authentication and authorization middleware:
+  - `authenticate`: Validates `Bearer` JWT token from `Authorization` header and attaches `{ userId, role }` to `req.user`.
+  - `authorize(...allowedRoles)`: Higher-order middleware checking whether `req.user.role` matches allowed roles (returns 403 Forbidden on mismatch).
+- **`src/modules/auth/tempAuth.ts`**: Deleted temporary auth guard file.
+- **`src/modules/auth/route.ts`**: Updated `GET /me` to use `authenticate` from `authGuard.ts`. Added temporary `GET /test-admin-only` route protected by `authenticate` + `authorize('ADMIN')`.
+
+### Key Decisions
+- Formalized authentication and authorization into reusable middlewares (`authenticate`, `authorize`) in `src/middlewares/authGuard.ts`.
+- Standardized error response shape for authentication (401) and authorization (403) failures (`{ success: false, message, errorDetails }`).
+
+### Verification Results
+1. **GET /api/auth/me Regression Check**: Executed request with valid CUSTOMER token.
+   - Result: Status 200 `{ success: true, message: "User profile retrieved successfully", data: { id, name, email, ... } }`.
+2. **Forbidden Access Test**: Executed `GET /api/auth/test-admin-only` with CUSTOMER token.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+3. **Unauthenticated Test**: Executed `GET /api/auth/test-admin-only` with no token header.
+   - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
+4. **Authorized Admin Test**: Created test admin user (`admin.test@example.com`), logged in to retrieve ADMIN JWT token, and executed `GET /api/auth/test-admin-only`.
+   - Result: Status 200 `{ success: true, message: "You are an admin" }`.
+5. **Clean Codebase**: Verified `src/modules/auth/tempAuth.ts` is deleted and no longer present.
