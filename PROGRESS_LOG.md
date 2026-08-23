@@ -51,3 +51,33 @@
 - **Format**: `npm run format` executed and formatted codebase according to Biome rules.
 - **Lint**: `npm run lint` (`biome check .`) executed cleanly with 0 errors across 7 files.
 - **Build**: `npm run build` compiled without errors.
+
+## [2026-08-23] - Task B: Prisma + Postgres Connection
+
+### Files & Configuration
+- **Created**: `prisma/schema.prisma` with datasource (`postgresql`) and generator (`prisma-client-js`)
+- **Created**: `prisma.config.ts` referencing `DATABASE_URL` from `.env`
+- **Confirmed**: `DATABASE_URL` exists in `.env` and is referenced in `src/config/env.ts`
+
+### Key Decisions
+- Configured Prisma schema and `prisma.config.ts` using Prisma 7 standards for loading connection details from `DATABASE_URL`.
+
+### Verification Results
+- **Prisma Validate**: `npx prisma validate` succeeded (`The schema at prisma\schema.prisma is valid 🚀`).
+- **Prisma Client Generation**: `npx prisma generate` generated Prisma Client (v7.9.1) without errors.
+- **Database Connection Verification**: Ran `npx prisma db pull`. Raw output:
+  ```text
+  Loaded Prisma config from prisma.config.ts.
+
+  Prisma schema loaded from prisma\schema.prisma.
+  Datasource "db": PostgreSQL database "fixitnow_db", schema "public" at "localhost:5432"
+
+  - Introspecting based on datasource defined in prisma\schema.prisma
+  × Introspecting based on datasource defined in prisma\schema.prisma
+
+  Error: P1001
+
+  Can't reach database server at `localhost:5432`
+
+  Please make sure your database server is running at `localhost:5432`.
+  ```
