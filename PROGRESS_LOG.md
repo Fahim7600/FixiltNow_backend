@@ -481,3 +481,33 @@
    - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
 8. **Malformed Service ID Handling**: Called `POST /api/bookings` with `serviceId: "abc123"`.
    - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "serviceId: Invalid service ID format" }`.
+
+## [2026-08-23] - Bookings Module: Listing & Detail Retrieval Endpoints (`GET /api/bookings` & `GET /api/bookings/:id`)
+
+### Files Created & Refactored
+- **`src/modules/bookings/service.ts`**:
+  - `getMyBookings`: Returns role-scoped bookings ordered by `createdAt` descending. If caller is a `CUSTOMER`, returns their bookings with technician's name (excluding email/phone). If caller is a `TECHNICIAN`, returns bookings linked to their `TechnicianProfile` with customer's name (excluding email/phone).
+  - `getBookingById`: Fetches full booking details. Performs ownership check (`customerId === userId` for CUSTOMER, `technicianProfile.userId === userId` for TECHNICIAN). Throws `AppError(403, "You do not have permission to view this booking")` if unauthorized. Throws `AppError(404, "Booking not found")` if missing.
+- **`src/modules/bookings/controller.ts`**: Added `getMyBookings` (200) and `getBookingById` (200) handlers wrapped in `asyncHandler`.
+- **`src/modules/bookings/route.ts`**: Mounted `GET /` and `GET /:id` protected by `authenticate` + `authorize('CUSTOMER', 'TECHNICIAN')`.
+- **Admin Visibility Decision Note**: Admin access to `/api/bookings` is explicitly restricted (HTTP 403) and deliberately deferred to Prompt 22 for a dedicated global admin booking management view.
+
+### Verification Results
+1. **Customer Booking Listing**: Called `GET /api/bookings` as CUSTOMER.
+   - Result: Status 200 `{ success: true, message: "Bookings retrieved successfully", data: [ { id, scheduledDate, status, priceAtBooking, service: { title }, technician: { name: "List Tech" } } ] }`. Verified email and phone are not present.
+2. **Technician Booking Listing**: Called `GET /api/bookings` as TECHNICIAN.
+   - Result: Status 200 `{ success: true, message: "Bookings retrieved successfully", data: [ { id, scheduledDate, status, priceAtBooking, service: { title }, customer: { name: "List Customer 1" } } ] }`. Verified email and phone are not present.
+3. **Empty Customer Booking Listing**: Called `GET /api/bookings` as a CUSTOMER with no bookings.
+   - Result: Status 200 `{ success: true, message: "Bookings retrieved successfully", data: [] }`.
+4. **Owner Customer Details Retrieval**: Called `GET /api/bookings/:id` as the CUSTOMER who owns the booking.
+   - Result: Status 200 returning full booking details.
+5. **Unrelated Customer Details Denial**: Called `GET /api/bookings/:id` as an unrelated CUSTOMER.
+   - Result: Status 403 `{ success: false, message: "You do not have permission to view this booking", errorDetails: "..." }`.
+6. **Technician Details Retrieval**: Called `GET /api/bookings/:id` as the TECHNICIAN assigned to the booking.
+   - Result: Status 200 returning full booking details.
+7. **Nonexistent Booking Details Lookup**: Called `GET /api/bookings/00000000-0000-0000-0000-000000000000`.
+   - Result: Status 404 `{ success: false, message: "Booking not found", errorDetails: "Booking not found" }`.
+8. **Admin Token Restriction**: Called `GET /api/bookings` or `GET /api/bookings/:id` using an ADMIN token.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+9. **Unauthenticated Access Denial**: Called `GET /api/bookings` without Authorization header.
+   - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.

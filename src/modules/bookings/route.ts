@@ -14,4 +14,18 @@ router.post(
   bookingsController.createBooking,
 );
 
+router.get(
+  "/",
+  authenticate,
+  authorize("CUSTOMER", "TECHNICIAN"),
+  bookingsController.getMyBookings,
+);
+
+router.get(
+  "/:id",
+  authenticate,
+  authorize("CUSTOMER", "TECHNICIAN"),
+  bookingsController.getBookingById,
+);
+
 export default router;
