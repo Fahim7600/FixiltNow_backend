@@ -228,3 +228,35 @@
    - Result: Status 404 `{ success: false, message: "Route not found", errorDetails: "Cannot GET /api/nonexistent" }`.
 6. **Unexpected Server Error (500)**: Triggered route throwing an unexpected `Error`.
    - Result: Status 500 `{ success: false, message: "Something went wrong", errorDetails: "Internal server error" }` without leaking stack trace to client; full error stack was logged server-side (`Unhandled Error: Error: Simulated unexpected database failure`).
+
+## [2026-08-23] - Hardened Input Validation & Auth Rate Limiting
+
+### Packages Installed
+- **Dependencies**: `express-rate-limit`
+
+### Files Created & Refactored
+- **`src/modules/auth/validation.ts`**:
+  - Added `.trim().toLowerCase()` to email field in `registerSchema` and `loginSchema`.
+  - Added `.trim()` to name field.
+  - Added phone format regex validation (`/^\+?[0-9\s-]{7,15}$/`).
+  - Enforced password complexity rule (`/^(?=.*[a-zA-Z])(?=.*\d)/`, "Password must contain at least one letter and one number").
+- **`src/modules/auth/service.ts`**: Normalized email inputs with `.trim().toLowerCase()` consistently in `registerUser` and `loginUser`.
+- **`src/middlewares/rateLimiter.ts`**: Created IP rate limiters using `express-rate-limit`:
+  - `loginLimiter`: Max 5 attempts per 15 minutes, returning HTTP 429 with standard JSON shape (`{ success: false, message: "Too many login attempts, please try again later", errorDetails: "..." }`).
+  - `registerLimiter`: Max 10 attempts per hour, returning HTTP 429 with standard JSON shape (`{ success: false, message: "Too many registration attempts, please try again later", errorDetails: "..." }`).
+- **`src/modules/auth/route.ts`**: Applied `registerLimiter` to `POST /register` and `loginLimiter` to `POST /login`.
+
+### Key Decisions
+- Standardized rate limit error responses to match global JSON response format instead of `express-rate-limit` plain text default.
+- Implemented case-insensitive email processing across validation schemas and database queries to avoid duplicate accounts caused by casing.
+
+### Verification Results
+1. **Case-Insensitive Email Registration**: Registered `Test@Example.com` then attempted registering `test@example.com`.
+   - Result: Second attempt rejected with HTTP 400 (`User with this email already exists`). Stored email normalized to `test@example.com`.
+2. **Password Complexity Validation**: Attempted registering with password `12345678` (digits only).
+   - Result: Rejected with HTTP 400 (`password: Password must contain at least one letter and one number`).
+3. **Phone Number Format Validation**: Attempted registering with `phone: "abc"` then `phone: "+1-234-567-8901"`.
+   - Result: `abc` rejected with HTTP 400 (`phone: Invalid phone number format`). Valid phone accepted with HTTP 201.
+4. **Login Rate Limiting**: Sent 6 consecutive invalid login attempts to `POST /api/auth/login`.
+   - Result: Attempt 6 returned HTTP 429 (`{ success: false, message: "Too many login attempts, please try again later", errorDetails: "Too many login attempts, please try again later" }`).
+5. **Baseline Login Under Limit**: Confirmed login logic continues to work normally under rate limit thresholds.

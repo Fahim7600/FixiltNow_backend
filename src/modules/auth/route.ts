@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate, authorize } from "../../middlewares/authGuard";
+import { loginLimiter, registerLimiter } from "../../middlewares/rateLimiter";
 import { validateRequest } from "../../middlewares/validateRequest";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as authController from "./controller";
@@ -9,10 +10,16 @@ const router = Router();
 
 router.post(
   "/register",
+  registerLimiter,
   validateRequest(registerSchema),
   authController.register,
 );
-router.post("/login", validateRequest(loginSchema), authController.login);
+router.post(
+  "/login",
+  loginLimiter,
+  validateRequest(loginSchema),
+  authController.login,
+);
 router.get("/me", authenticate, authController.getMe);
 
 // Temporary test route for role-based access control verification

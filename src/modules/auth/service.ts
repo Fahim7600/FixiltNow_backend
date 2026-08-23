@@ -6,8 +6,10 @@ import { AppError } from "../../utils/AppError";
 import type { LoginInput, RegisterInput } from "./validation";
 
 export const registerUser = async (data: RegisterInput) => {
+  const normalizedEmail = data.email.trim().toLowerCase();
+
   const existingUser = await prisma.user.findUnique({
-    where: { email: data.email },
+    where: { email: normalizedEmail },
   });
 
   if (existingUser) {
@@ -18,10 +20,10 @@ export const registerUser = async (data: RegisterInput) => {
 
   const user = await prisma.user.create({
     data: {
-      name: data.name,
-      email: data.email,
+      name: data.name.trim(),
+      email: normalizedEmail,
       password: hashedPassword,
-      phone: data.phone,
+      phone: data.phone?.trim(),
       role: data.role,
     },
   });
@@ -31,8 +33,10 @@ export const registerUser = async (data: RegisterInput) => {
 };
 
 export const loginUser = async (data: LoginInput) => {
+  const normalizedEmail = data.email.trim().toLowerCase();
+
   const user = await prisma.user.findUnique({
-    where: { email: data.email },
+    where: { email: normalizedEmail },
   });
 
   if (!user) {
