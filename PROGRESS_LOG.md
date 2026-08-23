@@ -367,3 +367,46 @@
    - Result: Status 200 `{ success: true, message: "Service deleted successfully" }`. Subsequent `GET /api/technician/services` confirmed `data: []`.
 8. **Negative Price Validation**: Called `POST /api/technician/services` with `price: -10`.
    - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "price: Price must be a positive number" }`.
+
+## [2026-08-23] - Public Catalog Browsing Module (`/api/services` & `/api/technicians`)
+
+### Database Changes
+- **`prisma/schema.prisma`**: Added optional `location String?` field to `TechnicianProfile` model.
+- Applied migration `20260823173831_add_technician_location` to remote Postgres database and regenerated Prisma Client.
+- Updated `src/modules/technicianProfile/validation.ts` (`upsertProfileSchema`) and `src/modules/technicianProfile/service.ts` (`upsertProfile`) to support the `location` field.
+
+### Files Created & Refactored
+- **`src/middlewares/validateRequest.ts`**: Added `validateQuery` middleware to validate and sanitize Express request query parameters using Zod schemas.
+- **`src/modules/catalog/validation.ts`**:
+  - `servicesQuerySchema`: Validates query parameters for `GET /api/services` (`categoryId` UUID, `search` string, `minPrice` number, `maxPrice` number, `location` string, `sortBy` enum, `page` min 1, `limit` min 1 max 50).
+  - `techniciansQuerySchema`: Validates query parameters for `GET /api/technicians` (`search` string, `location` string, `minRating` number, `skills` string, `page` min 1, `limit` min 1 max 50).
+- **`src/modules/catalog/service.ts`**:
+  - `getPublicServices`: Retrieves active services (`isActive: true`) filtered by category, search term (case-insensitive title match), price range, and technician location (case-insensitive location match). Includes category name and technician details. Returns paginated shape (`items`, `total`, `page`, `totalPages`).
+  - `getPublicTechnicians`: Retrieves active technician profiles (`User.status: "ACTIVE"`) filtered by name, location, min rating, and skills. Excludes private user fields (`email`, `phone`, `password`). Returns paginated shape (`items`, `total`, `page`, `totalPages`).
+  - `getTechnicianById`: Returns full public profile for a technician including their active services and a `reviews: []` placeholder (TODO for future reviews module). Throws `AppError(404, "Technician not found")` if missing.
+- **`src/modules/catalog/controller.ts`**: Handlers `getServices`, `getTechnicians`, and `getTechnicianById` wrapped in `asyncHandler`.
+- **`src/modules/catalog/route.ts`**: Exports `publicServicesRouter` and `publicTechniciansRouter`.
+- **`src/routes/index.ts`**: Mounted `publicServicesRouter` at `/services` (`GET /api/services`) and `publicTechniciansRouter` at `/technicians` (`GET /api/technicians`, `GET /api/technicians/:id`).
+
+### Task D Note (Categories Passthrough)
+- Confirmed `GET /api/categories` built previously is sufficient as-is for public category list used in frontend filter dropdowns.
+
+### Verification Results
+1. **Unfiltered Public Services Retrieval**: Called `GET /api/services` with no filters.
+   - Result: Status 200 `{ success: true, message: "Services retrieved successfully", data: { items, total, page, totalPages } }`. Confirmed inactive services (`isActive: false`) are excluded.
+2. **Search Filter Test**: Called `GET /api/services?search=pipe`.
+   - Result: Status 200 returning services matching title "pipe" (case-insensitive).
+3. **Price Range Filter Test**: Called `GET /api/services?minPrice=50&maxPrice=100`.
+   - Result: Status 200 returning services priced between 50 and 100.
+4. **Category Filter Test**: Called `GET /api/services?categoryId=<real-id>`.
+   - Result: Status 200 returning services linked to specified category ID.
+5. **Pagination Metadata Test**: Called `GET /api/services?page=1&limit=1`.
+   - Result: Status 200 returning `total: 3, page: 1, totalPages: 3` with 1 item in `items`.
+6. **Public Technicians Browsing & Privacy Check**: Called `GET /api/technicians` with no filters.
+   - Result: Status 200 returning technician profiles. Verified `email`, `phone`, `password` fields are **NOT** present in any items.
+7. **Location Filter Test**: Updated technician profile with `location: "Dallas, TX"` then called `GET /api/technicians?location=dallas`.
+   - Result: Status 200 returning matching Dallas technician.
+8. **Valid Technician Profile Retrieval**: Called `GET /api/technicians/:id` with valid technician ID.
+   - Result: Status 200 returning full technician profile, active services list, and `reviews: []` placeholder.
+9. **Invalid Technician Profile Lookup**: Called `GET /api/technicians/00000000-0000-0000-0000-000000000000`.
+   - Result: Status 404 `{ success: false, message: "Technician not found", errorDetails: "Technician not found" }`.

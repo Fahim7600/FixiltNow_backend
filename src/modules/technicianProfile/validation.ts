@@ -11,6 +11,7 @@ export const upsertProfileSchema = z.object({
   hourlyRate: z
     .number({ message: "Hourly rate must be a positive number" })
     .gt(0, "Hourly rate must be a positive number"),
+  location: z.string().trim().optional(),
 });
 
 export type UpsertProfileInput = z.infer<typeof upsertProfileSchema>;

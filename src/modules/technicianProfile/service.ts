@@ -13,6 +13,7 @@ export const upsertProfile = async (
       skills: data.skills,
       experienceYears: data.experienceYears,
       hourlyRate: data.hourlyRate,
+      ...(data.location !== undefined && { location: data.location }),
     },
     create: {
       userId,
@@ -20,6 +21,7 @@ export const upsertProfile = async (
       skills: data.skills,
       experienceYears: data.experienceYears,
       hourlyRate: data.hourlyRate,
+      location: data.location,
     },
   });
 
