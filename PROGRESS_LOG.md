@@ -511,3 +511,37 @@
    - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
 9. **Unauthenticated Access Denial**: Called `GET /api/bookings` without Authorization header.
    - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
+
+## [2026-08-23] - Bookings Module: Technician Status Transitions (`PATCH /api/technician/bookings/:id`)
+
+### Files Created & Refactored
+- **`src/modules/bookings/validation.ts`**:
+  - Added `updateBookingStatusSchema`: Validates `status` is required and restricted strictly to `["ACCEPTED", "DECLINED", "IN_PROGRESS", "COMPLETED"]`. Rejects `REQUESTED`, `PAID`, `CANCELLED`, or arbitrary string values.
+- **`src/modules/bookings/service.ts`**:
+  - Added `updateBookingStatus`: Fetches booking with `technicianProfile`. Throws `AppError(404, "Booking not found")` if missing. Verifies caller's `userId` matches `technicianProfile.userId` (throws `AppError(403, "You can only manage your own bookings")` if unauthorized). Enforces strict status transition state machine:
+    - `REQUESTED` → `ACCEPTED` | `DECLINED`
+    - `ACCEPTED` → `IN_PROGRESS`
+    - `IN_PROGRESS` → `COMPLETED`
+    - Any invalid transition (or terminal `COMPLETED` / `DECLINED` state) throws `AppError(400, "Invalid status transition from X to Y")`.
+- **`src/modules/bookings/controller.ts`**: Added `updateBookingStatus` (200) handler wrapped in `asyncHandler`.
+- **`src/modules/bookings/route.ts`**: Created and exported `technicianBookingRouter` with `PATCH /:id` route protected by `authenticate` + `authorize('TECHNICIAN')` and `validateRequest(updateBookingStatusSchema)`.
+- **`src/routes/index.ts`**: Mounted `technicianBookingRouter` under `/technician/bookings` (`PATCH /api/technician/bookings/:id`).
+
+### Verification Results
+1. **REQUESTED → ACCEPTED Transition**: Correct technician called `PATCH /api/technician/bookings/:id` with `status: "ACCEPTED"`.
+   - Result: Status 200 `{ success: true, message: "Booking status updated successfully", data: { id, status: "ACCEPTED", ... } }`.
+2. **ACCEPTED → ACCEPTED Repeat Transition Rejection**: Technician re-sent `status: "ACCEPTED"`.
+   - Result: Status 400 `{ success: false, message: "Invalid status transition from ACCEPTED to ACCEPTED", errorDetails: "..." }`.
+3. **ACCEPTED → IN_PROGRESS Transition**: Technician sent `status: "IN_PROGRESS"`.
+   - Result: Status 200 `{ success: true, message: "Booking status updated successfully", data: { id, status: "IN_PROGRESS", ... } }`.
+4. **IN_PROGRESS → COMPLETED Transition**: Technician sent `status: "COMPLETED"`.
+   - Result: Status 200 `{ success: true, message: "Booking status updated successfully", data: { id, status: "COMPLETED", ... } }`.
+5. **Terminal COMPLETED State Modification Rejection**: Technician attempted sending `status: "IN_PROGRESS"` on completed booking.
+   - Result: Status 400 `{ success: false, message: "Invalid status transition from COMPLETED to IN_PROGRESS", errorDetails: "..." }`.
+6. **REQUESTED → DECLINED Transition & Terminal DECLINED Rejection**: Fresh booking transitioned `REQUESTED` → `DECLINED` (Status 200). Subsequent attempt `DECLINED` → `ACCEPTED` failed with Status 400 (`Invalid status transition from DECLINED to ACCEPTED`).
+7. **Unassigned Technician Ownership Denial**: Unassigned Technician 2 attempted `PATCH` on Technician 1's booking.
+   - Result: Status 403 `{ success: false, message: "You can only manage your own bookings", errorDetails: "..." }`.
+8. **Customer Role Restriction**: Customer token attempted `PATCH /api/technician/bookings/:id`.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+9. **Invalid Status Input Validation**: Attempted `status: "REQUESTED"` and `status: "banana"`.
+   - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "status: Invalid status. Allowed statuses are ACCEPTED, DECLINED, IN_PROGRESS, COMPLETED" }`.

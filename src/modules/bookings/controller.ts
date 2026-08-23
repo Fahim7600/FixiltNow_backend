@@ -67,3 +67,29 @@ export const getBookingById = asyncHandler(
     });
   },
 );
+
+export const updateBookingStatus = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new AppError(401, "Unauthorized", "User ID missing from request");
+    }
+
+    const bookingId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const { status } = req.body;
+
+    const result = await bookingsService.updateBookingStatus(
+      userId,
+      bookingId,
+      status,
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Booking status updated successfully",
+      data: result,
+    });
+  },
+);

@@ -2,7 +2,9 @@ import { Router } from "express";
 import adminRoutes from "../modules/admin/route";
 import authRoutes from "../modules/auth/route";
 import availabilityRoutes from "../modules/availability/route";
-import bookingRoutes from "../modules/bookings/route";
+import bookingRoutes, {
+  technicianBookingRouter,
+} from "../modules/bookings/route";
 import {
   publicServicesRouter,
   publicTechniciansRouter,
@@ -26,6 +28,7 @@ router.use("/admin", adminRoutes);
 router.use("/technician", technicianProfileRoutes);
 router.use("/technician/services", serviceRoutes);
 router.use("/technician/availability", availabilityRoutes);
+router.use("/technician/bookings", technicianBookingRouter);
 router.use("/services", publicServicesRouter);
 router.use("/technicians", publicTechniciansRouter);
 router.use("/bookings", bookingRoutes);

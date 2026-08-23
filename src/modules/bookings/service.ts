@@ -1,3 +1,4 @@
+import type { BookingStatus } from "@prisma/client";
 import prisma from "../../config/prisma";
 import { AppError } from "../../utils/AppError";
 import type { CreateBookingInput } from "./validation";
@@ -246,4 +247,73 @@ export const getBookingById = async (
       name: booking.technicianProfile.user.name,
     },
   };
+};
+
+export const updateBookingStatus = async (
+  userId: string,
+  bookingId: string,
+  newStatus: BookingStatus,
+) => {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: {
+      technicianProfile: true,
+    },
+  });
+
+  if (!booking) {
+    throw new AppError(404, "Booking not found");
+  }
+
+  if (booking.technicianProfile.userId !== userId) {
+    throw new AppError(403, "You can only manage your own bookings");
+  }
+
+  const allowedTransitions: Record<string, string[]> = {
+    REQUESTED: ["ACCEPTED", "DECLINED"],
+    ACCEPTED: ["IN_PROGRESS"],
+    IN_PROGRESS: ["COMPLETED"],
+  };
+
+  const validNextStatuses = allowedTransitions[booking.status] || [];
+
+  if (!validNextStatuses.includes(newStatus)) {
+    throw new AppError(
+      400,
+      `Invalid status transition from ${booking.status} to ${newStatus}`,
+    );
+  }
+
+  const updatedBooking = await prisma.booking.update({
+    where: { id: bookingId },
+    data: { status: newStatus },
+    include: {
+      service: {
+        select: {
+          id: true,
+          title: true,
+          price: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      technicianProfile: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return updatedBooking;
 };

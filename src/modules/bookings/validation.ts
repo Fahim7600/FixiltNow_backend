@@ -13,4 +13,14 @@ export const createBookingSchema = z.object({
   notes: z.string().trim().optional(),
 });
 
+export const updateBookingStatusSchema = z.object({
+  status: z.enum(["ACCEPTED", "DECLINED", "IN_PROGRESS", "COMPLETED"], {
+    message:
+      "Invalid status. Allowed statuses are ACCEPTED, DECLINED, IN_PROGRESS, COMPLETED",
+  }),
+});
+
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+export type UpdateBookingStatusInput = z.infer<
+  typeof updateBookingStatusSchema
+>;
