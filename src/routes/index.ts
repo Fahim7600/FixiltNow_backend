@@ -2,6 +2,7 @@ import { Router } from "express";
 import adminRoutes from "../modules/admin/route";
 import authRoutes from "../modules/auth/route";
 import availabilityRoutes from "../modules/availability/route";
+import bookingRoutes from "../modules/bookings/route";
 import {
   publicServicesRouter,
   publicTechniciansRouter,
@@ -27,5 +28,6 @@ router.use("/technician/services", serviceRoutes);
 router.use("/technician/availability", availabilityRoutes);
 router.use("/services", publicServicesRouter);
 router.use("/technicians", publicTechniciansRouter);
+router.use("/bookings", bookingRoutes);
 
 export default router;

@@ -445,3 +445,39 @@
    - Result: Status 403 `{ success: false, message: "You can only delete your own availability windows", errorDetails: "..." }`.
 8. **Owner Deletion Verification**: Technician 1 called `DELETE /api/technician/availability/:id` on their own slot.
    - Result: Status 200 `{ success: true, message: "Availability window deleted successfully" }`. Follow-up `GET` confirmed slot `09:00 - 17:00` was removed.
+
+## [2026-08-23] - Bookings Module: Customer Booking Creation (`POST /api/bookings`)
+
+### Database Changes
+- **`prisma/schema.prisma`**:
+  - Added `BookingStatus` enum (`REQUESTED`, `ACCEPTED`, `DECLINED`, `PAID`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`).
+  - Added `Booking` model (`id`, `customerId` relation to `User`, `technicianProfileId` relation to `TechnicianProfile`, `serviceId` relation to `Service`, `scheduledDate` DateTime, `status` default `REQUESTED`, `priceAtBooking` Decimal, `notes` optional string, `createdAt`, `updatedAt`).
+  - Added inverse `bookings Booking[]` relation fields on `User`, `TechnicianProfile`, and `Service`.
+- Applied migration `20260823174824_add_booking_model` to remote Postgres database and regenerated Prisma Client.
+
+### Files Created & Refactored
+- **`src/modules/bookings/validation.ts`**:
+  - `createBookingSchema`: Validates `serviceId` (UUID format), `scheduledDate` (ISO datetime string, refined with a future date check `new Date(val) > new Date()`), and optional `notes`.
+- **`src/modules/bookings/service.ts`**:
+  - `createBooking`: Fetches target service by `serviceId` with `technicianProfile`. Throws `AppError(404, "Service not found")` if missing. Verifies `service.isActive === true` (throws `AppError(400, "This service is not currently available for booking")` if inactive). Snapshots current price into `priceAtBooking`. Creates booking with status `REQUESTED` and includes service title & technician name in the response payload.
+- **`src/modules/bookings/controller.ts`**: Express handler `createBooking` (201) wrapped in `asyncHandler`.
+- **`src/modules/bookings/route.ts`**: Mounted `POST /` protected by `authenticate` + `authorize('CUSTOMER')` and `validateRequest(createBookingSchema)`.
+- **`src/routes/index.ts`**: Mounted `bookingRoutes` under `/bookings` (`POST /api/bookings`).
+
+### Verification Results
+1. **Valid Booking Request Creation**: CUSTOMER token called `POST /api/bookings` with valid future date and active `serviceId`.
+   - Result: Status 201 `{ success: true, message: "Booking request created successfully", data: { id, customerId, status: "REQUESTED", priceAtBooking: "120", service: { title: "AC Maintenance" }, technicianProfile: { user: { name: "Booking Tech" } } } }`.
+2. **Past Scheduled Date Rejection**: Customer called `POST /api/bookings` with a date in the past.
+   - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "scheduledDate: Scheduled date must be a future date" }`.
+3. **Inactive Service Booking Rejection**: Customer called `POST /api/bookings` targeting an inactive service (`isActive: false`).
+   - Result: Status 400 `{ success: false, message: "This service is not currently available for booking", errorDetails: "..." }`.
+4. **Nonexistent Service ID Handling**: Customer called `POST /api/bookings` with non-existent valid UUID `serviceId`.
+   - Result: Status 404 `{ success: false, message: "Service not found", errorDetails: "Service not found" }`.
+5. **Technician Access Denial**: Called `POST /api/bookings` using a TECHNICIAN token.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+6. **Admin Access Denial**: Called `POST /api/bookings` using an ADMIN token.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+7. **Unauthenticated Access Denial**: Called `POST /api/bookings` with no Authorization header.
+   - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
+8. **Malformed Service ID Handling**: Called `POST /api/bookings` with `serviceId: "abc123"`.
+   - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "serviceId: Invalid service ID format" }`.
