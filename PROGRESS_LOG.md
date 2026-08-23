@@ -327,3 +327,43 @@
    - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
 8. **Unauthenticated Access**: Sent `PUT /api/technician/profile` with no Authorization header.
    - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
+
+## [2026-08-23] - Services Module & Technician Service Management
+
+### Database Changes
+- **`prisma/schema.prisma`**: Added `Service` model (`id`, `technicianProfileId` relation to `TechnicianProfile`, `categoryId` relation to `Category`, `title`, `description`, `price`, `isActive`, `createdAt`, `updatedAt`). Added `services Service[]` relations on both `Category` and `TechnicianProfile`.
+- Applied migration `20260823172059_add_service_model` to remote Postgres database and regenerated Prisma Client.
+
+### Files Created & Refactored
+- **`src/modules/services/validation.ts`**:
+  - `createServiceSchema`: Validates `categoryId` (uuid), `title` (min 3 chars), optional `description`, and `price` (`> 0`).
+  - `updateServiceSchema`: Partial update validation for `categoryId`, `title`, `description`, `price`, and `isActive`.
+- **`src/modules/services/service.ts`**:
+  - `createService`: Verifies caller has a `TechnicianProfile` and that `categoryId` exists. Links service to caller's `technicianProfileId`.
+  - `getMyServices`: Lists caller's services ordered by `createdAt` descending.
+  - `updateService`: Verifies caller owns the target service before applying partial updates.
+  - `deleteService`: Verifies ownership and deletes the service.
+- **`src/modules/services/controller.ts`**: Handlers `createService` (201), `getMyServices` (200), `updateService` (200), and `deleteService` (200) wrapped in `asyncHandler`.
+- **`src/modules/services/route.ts`**: Mounted `POST /`, `GET /`, `PATCH /:id`, `DELETE /:id` protected by `authenticate` + `authorize('TECHNICIAN')`.
+- **`src/routes/index.ts`**: Mounted `serviceRoutes` under `/technician/services`.
+
+### Routing Architecture Decision
+- Mounted `serviceRoutes` under `/technician/services` directly in `src/routes/index.ts`. This provides clean, top-level path mapping for `POST/GET/PATCH/DELETE /api/technician/services` while maintaining full domain encapsulation in `src/modules/services/`.
+
+### Verification Results
+1. **Unprofiled Technician Listing Prevention**: Called `POST /api/technician/services` using a fresh technician account without a profile.
+   - Result: Status 404 `{ success: false, message: "Please create your technician profile before adding services", errorDetails: "..." }`.
+2. **Valid Service Creation**: Profiled technician called `POST /api/technician/services` with valid `categoryId`, `title`, `price`.
+   - Result: Status 201 `{ success: true, message: "Service created successfully", data: { id, title: "Emergency Pipe Leak Repair", price: "75", ... } }`.
+3. **Invalid Category Validation**: Called `POST /api/technician/services` with non-existent `categoryId`.
+   - Result: Status 400 `{ success: false, message: "Invalid category", errorDetails: "Invalid category" }`.
+4. **My Services Retrieval**: Technician called `GET /api/technician/services`.
+   - Result: Status 200 returning list containing only technician's own services.
+5. **Cross-Technician Ownership Enforcement**: Registered Technician 2, logged in, and attempted `PATCH /api/technician/services/:id` on Technician 1's service.
+   - Result: Status 403 `{ success: false, message: "You can only modify your own services", errorDetails: "You can only modify your own services" }`.
+6. **Partial Service Update**: Owner called `PATCH /api/technician/services/:id` with `{ price: 85.00 }`.
+   - Result: Status 200 showing `price` updated to `"85"` while title/description remained intact.
+7. **Service Deletion**: Owner called `DELETE /api/technician/services/:id`.
+   - Result: Status 200 `{ success: true, message: "Service deleted successfully" }`. Subsequent `GET /api/technician/services` confirmed `data: []`.
+8. **Negative Price Validation**: Called `POST /api/technician/services` with `price: -10`.
+   - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "price: Price must be a positive number" }`.
