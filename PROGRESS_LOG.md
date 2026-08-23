@@ -144,3 +144,32 @@
    - Result: HTTP 400 response with `{ success: false, message: 'Validation Error', errorDetails: 'role: Role must be either CUSTOMER or TECHNICIAN' }`.
 5. **Database Password Hashing**: Queried database directly using Prisma Client for `john.doe@example.com`.
    - Result: Confirmed stored password value is a 60-character bcrypt hash (`$2b$10$ZmqMeM.FjpfPn2MT9SFuguVCcN78GwF7mhD8U7FbivGgDGqIa4j3y`), not plaintext.
+
+## [2026-08-23] - Auth Module: User Login (`POST /api/auth/login`) & Profile Route (`GET /api/auth/me`)
+
+### Files Created & Modified
+- **`src/types/express.d.ts`**: Added custom TypeScript interface declaration extending Express `Request` with `user?: { userId: string; role: Role | string }`.
+- **`src/modules/auth/validation.ts`**: Added `loginSchema` validating `email` and `password`.
+- **`src/modules/auth/tempAuth.ts`**: Created temporary local auth guard middleware (`tempAuthGuard`) to verify JWT tokens from `Authorization: Bearer <token>` and populate `req.user`.
+- **`src/modules/auth/service.ts`**: Implemented `loginUser` (credential validation, bcrypt comparison, `BANNED` status check, JWT generation) and `getMe` (retrieving user profile without password).
+- **`src/modules/auth/controller.ts`**: Added `login` and `getMe` controllers returning standardized responses.
+- **`src/modules/auth/route.ts`**: Mounted `POST /login` with `loginSchema` validation and `GET /me` with `tempAuthGuard`.
+
+### Key Decisions
+- Generic error messages ("Invalid credentials") for both missing users and incorrect passwords to prevent user enumeration attacks.
+- JWT signed with `process.env.JWT_SECRET` and `process.env.JWT_EXPIRES_IN`, containing only `userId` and `role` in payload.
+- Isolated temporary auth guard in `src/modules/auth/tempAuth.ts` clearly flagged for future migration to `src/middlewares`.
+
+### Verification Results
+1. **Valid Login**: `POST /api/auth/login` with `john.doe@example.com` / `password123`.
+   - Result: Status 200 `{ success: true, message: "User logged in successfully", data: { token: "...", user: { id, name, email, phone, role, status, createdAt, updatedAt } } }`. Password field stripped.
+2. **Invalid Password**: `POST /api/auth/login` with wrong password.
+   - Result: Status 400 `{ success: false, message: "Invalid credentials", errorDetails: "Invalid credentials" }`.
+3. **Non-existent Email**: `POST /api/auth/login` with non-existent email.
+   - Result: Status 400 `{ success: false, message: "Invalid credentials", errorDetails: "Invalid credentials" }`. Same generic error as wrong password.
+4. **GET /api/auth/me (Authenticated)**: Called with `Authorization: Bearer <token>`.
+   - Result: Status 200 `{ success: true, message: "User profile retrieved successfully", data: { id, name, email, ... } }`. Password field stripped.
+5. **GET /api/auth/me (Unauthenticated / Invalid Token)**:
+   - No token: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
+   - Invalid token: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "Invalid or expired token" }`.
+6. **JWT Payload Verification**: Decoded token payload (`userId`, `role`, `iat`, `exp`). Confirmed password is **NOT** included in the token.
