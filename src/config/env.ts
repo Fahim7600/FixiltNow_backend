@@ -3,8 +3,30 @@ import dotenv from "dotenv";
 
 dotenv.config({ path: path.join(process.cwd(), ".env") });
 
+const env = process.env.NODE_ENV || "development";
+
+if (env !== "test") {
+  const missingVars: string[] = [];
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    missingVars.push("STRIPE_SECRET_KEY");
+  }
+  if (!process.env.STRIPE_PUBLISHABLE_KEY) {
+    missingVars.push("STRIPE_PUBLISHABLE_KEY");
+  }
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    missingVars.push("STRIPE_WEBHOOK_SECRET");
+  }
+
+  if (missingVars.length > 0) {
+    throw new Error(
+      `Missing required environment variable(s): ${missingVars.join(", ")}`,
+    );
+  }
+}
+
 export const config = {
-  env: process.env.NODE_ENV || "development",
+  env,
   port: process.env.PORT ? parseInt(process.env.PORT, 10) : 5000,
   databaseUrl: process.env.DATABASE_URL || "",
   jwt: {

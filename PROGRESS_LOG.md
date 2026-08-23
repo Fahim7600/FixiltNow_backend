@@ -545,3 +545,19 @@
    - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
 9. **Invalid Status Input Validation**: Attempted `status: "REQUESTED"` and `status: "banana"`.
    - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "status: Invalid status. Allowed statuses are ACCEPTED, DECLINED, IN_PROGRESS, COMPLETED" }`.
+
+## [2026-08-24] - Stripe SDK & Configuration Layer Setup
+
+### Packages Installed
+- **Dependencies**: `stripe` (v22.5.0)
+
+### Files Created & Refactored
+- **`src/config/env.ts`**: Updated environment variable loader to perform fail-fast startup validation for `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, and `STRIPE_WEBHOOK_SECRET` when `NODE_ENV !== 'test'`.
+- **`src/config/stripe.ts`**: Created singleton `Stripe` client instance configured with `config.stripe.secretKey` and explicitly pinned `apiVersion: "2026-07-29.dahlia"`.
+
+### Verification Results
+1. **Compilation & Build**: Executed `npm run format ; npm run lint ; npm run build`. Clean build succeeded with 0 errors and 0 lint warnings.
+2. **Fail-Fast Startup Validation**: Temporarily removed `STRIPE_SECRET_KEY` from `.env` and executed `src/config/env.ts`.
+   - Result: App failed fast at startup with clear exception: `Error: Missing required environment variable(s): STRIPE_SECRET_KEY`. Restored `.env` immediately.
+3. **Stripe API Connectivity Check**: Executed `stripe.balance.retrieve()` call using the singleton client instance.
+   - Result: Returned successfully with `object: "balance"`, `livemode: false`, and `available: [{ currency: "usd" }]`.
