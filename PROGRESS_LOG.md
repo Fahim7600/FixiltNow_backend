@@ -260,3 +260,38 @@
 4. **Login Rate Limiting**: Sent 6 consecutive invalid login attempts to `POST /api/auth/login`.
    - Result: Attempt 6 returned HTTP 429 (`{ success: false, message: "Too many login attempts, please try again later", errorDetails: "Too many login attempts, please try again later" }`).
 5. **Baseline Login Under Limit**: Confirmed login logic continues to work normally under rate limit thresholds.
+
+## [2026-08-23] - Categories Module & Admin Routing
+
+### Database Changes
+- **`prisma/schema.prisma`**: Added `Category` model (`id`, `name`, `description`, `createdAt`, `updatedAt`).
+- Applied migration `20260823124558_add_category_model` to remote database and regenerated Prisma Client.
+
+### Files Created & Refactored
+- **`src/modules/categories/validation.ts`**: `createCategorySchema` requiring `name` (trimmed, min 2 chars) and optional `description`.
+- **`src/modules/categories/service.ts`**:
+  - `createCategory`: Checks for case-insensitive duplicate names using Prisma `mode: "insensitive"`. Throws `AppError(400, "Category already exists")` on duplicate.
+  - `getAllCategories`: Retrieves all categories ordered by `name` ascending.
+- **`src/modules/categories/controller.ts`**: Handlers `createCategory` (201) and `getAllCategories` (200) wrapped in `asyncHandler`.
+- **`src/modules/categories/route.ts`**: Exposes public `GET /` route.
+- **`src/modules/admin/route.ts`**: Exposes admin-only `POST /categories` route protected by `authenticate`, `authorize('ADMIN')`, and `validateRequest(createCategorySchema)`.
+- **`src/routes/index.ts`**: Mounted `categoryRoutes` under `/categories` and `adminRoutes` under `/admin`.
+
+### Key Decisions / Routing Architecture
+- Created `src/modules/admin/route.ts` mounted at `/api/admin` in `src/routes/index.ts` to satisfy the project specification's `POST /api/admin/categories` endpoint while keeping category domain logic encapsulated in `src/modules/categories/`.
+
+### Verification Results
+1. **Unauthenticated Public Categories Retrieval**: Called `GET /api/categories` with no auth headers.
+   - Result: Status 200 `{ success: true, message: "Categories fetched successfully", data: [] }`.
+2. **Customer Access Denial**: Sent `POST /api/admin/categories` with CUSTOMER token.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+3. **Unauthenticated Admin Route Access**: Sent `POST /api/admin/categories` with no token.
+   - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
+4. **Authorized Category Creation**: Sent `POST /api/admin/categories` with ADMIN token (`name: "Plumbing"`).
+   - Result: Status 201 `{ success: true, message: "Category created successfully", data: { id, name: "Plumbing", description: "...", ... } }`.
+5. **Case-Insensitive Duplicate Prevention**: Sent `POST /api/admin/categories` with ADMIN token (`name: "plumbing"`).
+   - Result: Status 400 `{ success: false, message: "Category already exists", errorDetails: "Category already exists" }`.
+6. **Populated Categories Listing**: Called `GET /api/categories` with no auth headers.
+   - Result: Status 200 returning array containing newly created `Plumbing` category object.
+7. **Validation Failure Handling**: Sent `POST /api/admin/categories` with invalid data (`name: "  "`).
+   - Result: Status 400 `{ success: false, message: "Validation Error", errorDetails: "name: Category name must be at least 2 characters" }`.
