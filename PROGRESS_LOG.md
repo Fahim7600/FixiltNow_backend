@@ -709,3 +709,49 @@
    - Result: Status 201. `GET /api/technicians/:id` confirmed `avgRating: 4` (average of 5 and 3) and `totalReviews: 2`.
 8. **Role Access Restrictions (Technician & Admin)**: Attempted review submission using TECHNICIAN and ADMIN tokens.
    - Result: Both returned Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+
+## [2026-08-24] - Admin Module: User Management & Platform-Wide Visibility
+
+### Files Created & Refactored
+- **`src/modules/admin/validation.ts`**:
+  - `updateUserStatusSchema`: Validates required `status` ("ACTIVE" | "BANNED").
+  - Query validation schemas for `adminUsersQuerySchema` (optional `role`, `status`, `page`, `limit`), `adminBookingsQuerySchema` (optional `status`, `page`, `limit`), and `adminPaymentsQuerySchema` (optional `status`, `page`, `limit`).
+- **`src/modules/admin/service.ts`**:
+  - `getAllUsers(filters)`: Returns paginated user records stripped of password.
+  - `updateUserStatus(targetUserId, newStatus)`: Updates user status. Throws `AppError(400, "Cannot change status of an admin account")` if target user is an ADMIN.
+  - `getAllBookings(filters)`: Platform-wide view of all bookings (deferred from Prompt 15). Enriched with `customerName`, `technicianName`, and `serviceTitle`.
+  - `getAllPayments(filters)`: Platform-wide view of all payments (deferred from Prompt 20). Enriched with `customerName`, `technicianName`, `serviceTitle`, and `scheduledDate`.
+  - `getAllCategories()`: Calls `getAllCategories()` from `src/modules/categories/service.ts` to reuse domain logic.
+- **`src/modules/admin/controller.ts`**: Handlers `getAllUsers`, `updateUserStatus`, `getAllBookings`, `getAllPayments`, and `getAllCategories` wrapped in `asyncHandler`.
+- **`src/modules/admin/route.ts`**: Extended existing router with `router.use(authenticate, authorize("ADMIN"))` protecting:
+  - `GET /api/admin/users`
+  - `PATCH /api/admin/users/:id`
+  - `GET /api/admin/bookings`
+  - `GET /api/admin/payments`
+  - `GET /api/admin/categories`
+  - `POST /api/admin/categories` (retained from Prompt 9).
+
+### Categories Reuse Decision
+- Reused `getAllCategories()` directly from `src/modules/categories/service.ts` inside `src/modules/admin/service.ts`. This avoids code duplication while allowing `GET /api/admin/categories` to return category data formatted consistently across the system.
+
+### Verification Results
+1. **Admin User Listing & Password Excluded**: Called `GET /api/admin/users` as ADMIN.
+   - Result: Status 200 returning list of all users. Confirmed `password` field is not present in any record.
+2. **User Role Filtering**: Called `GET /api/admin/users?role=TECHNICIAN`.
+   - Result: Status 200 returning only technician accounts.
+3. **User Status Banning**: Called `PATCH /api/admin/users/:id` with `{ status: "BANNED" }` on Customer 1.
+   - Result: Status 200 returning updated user record with `status: "BANNED"`.
+4. **Banned User Login Rejection**: Attempted `POST /api/auth/login` as the banned Customer 1.
+   - Result: Status 400 `{ success: false, message: "Account has been suspended", errorDetails: "Account has been suspended" }`.
+5. **Admin Self/Peer Ban Safety Guard**: Attempted `PATCH /api/admin/users/:id` with `{ status: "BANNED" }` targeting an ADMIN account.
+   - Result: Status 400 `{ success: false, message: "Cannot change status of an admin account", errorDetails: "..." }`.
+6. **Platform-Wide Bookings Visibility**: Called `GET /api/admin/bookings` as ADMIN.
+   - Result: Status 200 returning all 17 platform-wide bookings across all users.
+7. **Platform-Wide Payments Visibility**: Called `GET /api/admin/payments` as ADMIN.
+   - Result: Status 200 returning all 8 platform-wide payments across all users.
+8. **Admin Categories Listing**: Called `GET /api/admin/categories` as ADMIN.
+   - Result: Status 200 returning list of categories.
+9. **Role Restriction Enforcement**: Called `/api/admin/users` using CUSTOMER and TECHNICIAN tokens.
+   - Result: Both returned Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+10. **Unauthenticated Denial**: Called `/api/admin/users` with no token header.
+    - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
