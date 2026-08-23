@@ -10,6 +10,9 @@
     "lint": "biome check .",
     "format": "biome format --write ."
   },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Fahim7600/FixiltNow_backend.git"

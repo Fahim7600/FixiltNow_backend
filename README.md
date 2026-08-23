@@ -1,6 +1,28 @@
 # FixItNow - Backend API
 
-FixItNow is a backend-only home services marketplace API built with Node.js, Express, TypeScript, Prisma ORM, and JWT authentication.
+FixItNow is a backend-only home services marketplace API built with Node.js, Express, TypeScript, Prisma ORM, PostgreSQL, and JWT authentication.
+
+## Working Admin Credentials
+
+For testing and grading verification, the database seed script provisions a working admin account:
+
+- **Email**: `admin@fixitnow.com`
+- **Password**: `Admin@12345`
+- **Role**: `ADMIN`
+
+## Database Seeding
+
+To provision the admin account and baseline service categories ("Plumbing", "Electrical", "Cleaning", "Painting", "Carpentry"), run:
+
+```bash
+npx prisma db seed
+```
+
+## API Documentation
+
+Interactive Swagger/OpenAPI documentation is available at:
+
+- **Swagger UI**: `http://localhost:5000/api-docs`
 
 ## Architecture & Modular Convention
 
@@ -16,10 +38,10 @@ Each module folder contains:
 
 ```text
 /src
-  /modules        <- Feature modules (auth, users, services, bookings, payments, reviews, categories)
-  /middlewares    <- Shared Express middlewares (error handlers, auth guards, etc.)
-  /config         <- Application configuration and environment variable loading
-  /utils          <- Shared utility helper functions
+  /modules        <- Feature modules (auth, admin, availability, bookings, catalog, categories, payments, reviews, services, technicianProfile)
+  /middlewares    <- Shared Express middlewares (errorHandler, notFoundHandler, authGuard, rateLimiter, validateRequest)
+  /config         <- Application configuration, Prisma client, Stripe SDK, and Swagger setup
+  /utils          <- Shared utility helper functions (AppError, asyncHandler)
   /routes         <- Central route aggregator (index.ts)
   app.ts          <- Express app configuration and middleware chain
   server.ts       <- Server entry point
@@ -30,4 +52,6 @@ Each module folder contains:
 - `npm run dev`: Runs the application in development mode with live reload (`ts-node-dev`)
 - `npm run build`: Compiles TypeScript to JavaScript in the `dist/` directory
 - `npm start`: Runs the production build (`node dist/server.js`)
-- `npm run lint`: Runs ESLint code quality checks
+- `npm run lint`: Runs Biome check for linting
+- `npm run format`: Runs Biome formatting
+- `npx prisma db seed`: Runs database seed script (`prisma/seed.ts`)

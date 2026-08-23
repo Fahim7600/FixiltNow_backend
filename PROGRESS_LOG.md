@@ -806,3 +806,31 @@
    - Result: Both endpoints returned HTTP 200 OK with expected JSON payloads, confirming zero runtime regressions.
 5. **Clean TypeScript Build**: Executed `npm run build` (`tsc`).
    - Result: Compiled cleanly with 0 errors and 0 warnings.
+
+## [2026-08-24] - Database Seed Script (`npx prisma db seed`)
+
+### Files Created & Refactored
+- **`prisma/seed.ts`**:
+  - Implemented database seed script utilizing `bcrypt.hash` (10 rounds) for password hashing.
+  - Upserts `ADMIN` user (`email: "admin@fixitnow.com"`, `name: "FixItNow Admin"`, `role: "ADMIN"`, `status: "ACTIVE"`).
+  - Upserts 5 baseline service categories (`Plumbing`, `Electrical`, `Cleaning`, `Painting`, `Carpentry`) by unique `name`.
+  - Logs admin email and category count upon completion (omitting raw password from console logs).
+  - Implemented error handling (`try/catch/finally` with `prisma.$disconnect()` and `process.exit(1)` on error).
+- **`prisma.config.ts`**:
+  - Configured `migrations.seed` to execute `npx ts-node prisma/seed.ts`.
+- **`package.json`**:
+  - Added `"prisma": { "seed": "ts-node prisma/seed.ts" }` configuration.
+- **`README.md`**:
+  - Documented working admin credentials, database seed instructions, and Swagger API documentation link.
+
+### Verification Results
+1. **First Seed Execution**: Ran `npx prisma db seed`.
+   - Result: Completed successfully, logged `Admin Account Provisioned: admin@fixitnow.com (Role: ADMIN)` and `Baseline Categories Provisioned: 5`. Raw password was not printed in logs.
+2. **Seeded Admin Login**: Called `POST /api/auth/login` with seeded admin credentials.
+   - Result: Status 200 OK. Returned valid JWT token and user profile with `role: "ADMIN"`.
+3. **Admin Token Authorization**: Called `GET /api/admin/users` using the retrieved JWT token.
+   - Result: Status 200 OK returning paginated user list across platform.
+4. **Idempotency Verification**: Ran `npx prisma db seed` a second time.
+   - Result: Completed cleanly without duplicate key errors. Confirmed admin user count (8) and category count (5) remained unchanged before and after.
+5. **Categories Listing**: Called `GET /api/categories`.
+   - Result: Status 200 OK returning all 5 baseline categories (`Plumbing`, `Electrical`, `Cleaning`, `Painting`, `Carpentry`).
