@@ -81,3 +81,34 @@
 
   Please make sure your database server is running at `localhost:5432`.
   ```
+
+## [2026-08-23] - Task A & B: Remote Prisma Connection & User Model Setup
+
+### Packages Installed
+- Installed `pg` and `@prisma/adapter-pg` (and `@types/pg`) for Prisma 7 Postgres driver adapter support.
+
+### Files & Schema Changes
+- **`prisma/schema.prisma`**: Added `Role` enum (`CUSTOMER`, `TECHNICIAN`, `ADMIN`), `UserStatus` enum (`ACTIVE`, `BANNED`), and `User` model (`id`, `name`, `email`, `password`, `phone`, `role`, `status`, `createdAt`, `updatedAt`).
+- **`prisma.config.ts`**: Verified `import "dotenv/config";` loads `DATABASE_URL` from `.env`.
+
+### Key Decisions
+- Created database migration `20260823121243_add_user_model` to sync the User model with the remote Postgres instance.
+
+### Verification Results
+- **Prisma Validate**: `npx prisma validate` succeeded against `prisma.config.ts`.
+- **Remote DB Pull Connection Test**: Output from `npx prisma db pull`:
+  ```text
+  Loaded Prisma config from prisma.config.ts.
+
+  Prisma schema loaded from prisma\schema.prisma.
+  Datasource "db": PostgreSQL database "postgres", schema "public" at "pooled.db.prisma.io:5432"
+
+  - Introspecting based on datasource defined in prisma\schema.prisma
+  × Introspecting based on datasource defined in prisma\schema.prisma
+  Error: 
+  P4001 The introspected database was empty:
+  ```
+- **Migration & Client Generation**: `npx prisma migrate dev --name add_user_model` applied migration to `pooled.db.prisma.io`, and `npx prisma generate` generated Prisma Client v7.9.1.
+- **Table Verification**: Ran test script querying `prisma.user.findMany()`. Confirmed response: `CONFIRMED_REMOTE_DB: User table exists. Records count: 0`.
+- **Repo Cleanup**: Deleted throwaway test script (`test-db.js`).
+- **Lint & Build**: `npm run lint` and `npm run build` passed with zero errors.
