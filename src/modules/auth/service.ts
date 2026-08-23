@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt, { type Secret, type SignOptions } from "jsonwebtoken";
 import { config } from "../../config/env";
 import prisma from "../../config/prisma";
+import { AppError } from "../../utils/AppError";
 import type { LoginInput, RegisterInput } from "./validation";
 
 export const registerUser = async (data: RegisterInput) => {
@@ -10,7 +11,7 @@ export const registerUser = async (data: RegisterInput) => {
   });
 
   if (existingUser) {
-    throw new Error("User with this email already exists");
+    throw new AppError(400, "User with this email already exists");
   }
 
   const hashedPassword = await bcrypt.hash(data.password, 10);
@@ -35,16 +36,16 @@ export const loginUser = async (data: LoginInput) => {
   });
 
   if (!user) {
-    throw new Error("Invalid credentials");
+    throw new AppError(400, "Invalid credentials");
   }
 
   const isPasswordMatched = await bcrypt.compare(data.password, user.password);
   if (!isPasswordMatched) {
-    throw new Error("Invalid credentials");
+    throw new AppError(400, "Invalid credentials");
   }
 
   if (user.status === "BANNED") {
-    throw new Error("Account has been suspended");
+    throw new AppError(400, "Account has been suspended");
   }
 
   const secret: Secret = config.jwt.secret;
@@ -74,7 +75,7 @@ export const getMe = async (userId: string) => {
   });
 
   if (!user) {
-    throw new Error("User not found");
+    throw new AppError(404, "User not found");
   }
 
   const { password: _, ...userWithoutPassword } = user;

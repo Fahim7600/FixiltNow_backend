@@ -197,3 +197,34 @@
 4. **Authorized Admin Test**: Created test admin user (`admin.test@example.com`), logged in to retrieve ADMIN JWT token, and executed `GET /api/auth/test-admin-only`.
    - Result: Status 200 `{ success: true, message: "You are an admin" }`.
 5. **Clean Codebase**: Verified `src/modules/auth/tempAuth.ts` is deleted and no longer present.
+
+## [2026-08-23] - Global Error Handling, AppError Class & AsyncHandler Utility
+
+### Files Created & Refactored
+- **`src/utils/AppError.ts`**: Created custom `AppError` class extending `Error` with `statusCode`, `message`, and `errorDetails` fields.
+- **`src/utils/asyncHandler.ts`**: Created `asyncHandler` higher-order wrapper catching async errors and forwarding to Express `next(err)`.
+- **`src/middlewares/errorHandler.ts`**: Created global 4-argument Express error handling middleware:
+  - Formats `AppError`, `ZodError`, and Prisma known errors (`P2002`, `P2025`).
+  - Catches unexpected errors, logs details server-side (`console.error`), and returns safe HTTP 500 response (`{ success: false, message: "Something went wrong", errorDetails: "Internal server error" }`).
+- **`src/middlewares/notFoundHandler.ts`**: Created 404 handler for undefined routes (`{ success: false, message: "Route not found", errorDetails }`).
+- **`src/app.ts`**: Registered `notFoundHandler` after routes and `errorHandler` as the final middleware.
+- **`src/modules/auth/service.ts`**: Replaced generic `Error` objects with `AppError(statusCode, message)`.
+- **`src/modules/auth/controller.ts`**: Wrapped all controller handlers in `asyncHandler`, eliminating manual `try/catch` boilerplate.
+
+### Key Decisions
+- Centralized all error formatting and HTTP status mapping into `src/middlewares/errorHandler.ts`.
+- Standardized error response shape across entire API: `{ success: false, message: "...", errorDetails: "..." }`.
+
+### Verification Results
+1. **Duplicate Email Registration**: Sent registration request with existing email.
+   - Result: Status 400 `{ success: false, message: "User with this email already exists", errorDetails: "User with this email already exists" }`.
+2. **Invalid Password Login**: Sent login request with wrong password.
+   - Result: Status 400 `{ success: false, message: "Invalid credentials", errorDetails: "Invalid credentials" }`.
+3. **Unauthenticated GET /me**: Called `GET /api/auth/me` without Authorization header.
+   - Result: Status 401 `{ success: false, message: "Unauthorized", errorDetails: "No token provided" }`.
+4. **Forbidden Access**: Called `GET /api/auth/test-admin-only` with CUSTOMER token.
+   - Result: Status 403 `{ success: false, message: "Forbidden", errorDetails: "You do not have permission to access this resource" }`.
+5. **Undefined Route Handling**: Sent request to `GET /api/nonexistent`.
+   - Result: Status 404 `{ success: false, message: "Route not found", errorDetails: "Cannot GET /api/nonexistent" }`.
+6. **Unexpected Server Error (500)**: Triggered route throwing an unexpected `Error`.
+   - Result: Status 500 `{ success: false, message: "Something went wrong", errorDetails: "Internal server error" }` without leaking stack trace to client; full error stack was logged server-side (`Unhandled Error: Error: Simulated unexpected database failure`).

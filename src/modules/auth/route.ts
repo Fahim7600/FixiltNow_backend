@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate, authorize } from "../../middlewares/authGuard";
 import { validateRequest } from "../../middlewares/validateRequest";
+import { asyncHandler } from "../../utils/asyncHandler";
 import * as authController from "./controller";
 import { loginSchema, registerSchema } from "./validation";
 
@@ -25,6 +26,14 @@ router.get(
       message: "You are an admin",
     });
   },
+);
+
+// Temporary test route for 500 unexpected error verification
+router.get(
+  "/test-unexpected-error",
+  asyncHandler(async () => {
+    throw new Error("Simulated unexpected database failure");
+  }),
 );
 
 export default router;
