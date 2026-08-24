@@ -16,6 +16,9 @@ import routes from "./routes";
 
 const app: Application = express();
 
+// Enable Trust Proxy (reads X-Forwarded-For header from reverse proxies / Next.js)
+app.set("trust proxy", 1);
+
 // Security Headers (helmet)
 app.use(helmet());
 

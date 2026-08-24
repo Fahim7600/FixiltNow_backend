@@ -9,35 +9,37 @@ export const apiLimiter = rateLimit({
     res.status(429).json({
       success: false,
       message: "Too many requests, please try again later",
-      errorDetails: "Too many requests, please try again later",
+      errorDetails: "Rate limit exceeded",
     });
   },
 });
 
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 5,
+  limit: 15,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) => {
     res.status(429).json({
       success: false,
-      message: "Too many login attempts, please try again later",
-      errorDetails: "Too many login attempts, please try again later",
+      message:
+        "Too many login attempts from this IP. Please try again after 15 minutes.",
+      errorDetails: "Rate limit exceeded",
     });
   },
 });
 
 export const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  limit: 10,
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) => {
     res.status(429).json({
       success: false,
-      message: "Too many registration attempts, please try again later",
-      errorDetails: "Too many registration attempts, please try again later",
+      message:
+        "Too many registration attempts from this IP. Please try again after 15 minutes.",
+      errorDetails: "Rate limit exceeded",
     });
   },
 });
